@@ -31,15 +31,28 @@ log = get_logger(__name__)
 # --- Helpers --------------------------------------------------------------
 
 _RECEIVED_ON_RE = re.compile(r"\s*Received on\s*📱?\s*\[.*?\]\s*$", re.IGNORECASE | re.DOTALL)
+# Placeholders que o GHL/WhatsApp Plugin insere no body quando a mensagem é não-textual.
+# Ex: "> Voice Note <", "> Image <", "> Video <", "> Document <"
+_GHL_TYPE_MARKER_RE = re.compile(r"^\s*>\s*(Voice Note|Image|Video|Document|Sticker|Location|Audio|GIF)\s*<\s*$", re.IGNORECASE)
+# Quote/reply do WhatsApp (linhas iniciadas com ↪︎ até a primeira linha em branco).
+_QUOTE_PREFIX_RE = re.compile(r"^↪︎.*?\n\s*\n", re.DOTALL)
 
 
 def strip_received_on(text: str | None) -> str:
     if not text:
         return ""
-    return _RECEIVED_ON_RE.sub("", text).strip()
+    cleaned = _RECEIVED_ON_RE.sub("", text)
+    cleaned = _QUOTE_PREFIX_RE.sub("", cleaned)
+    # Linhas que são só marcadores GHL viram vazio
+    out_lines: list[str] = []
+    for line in cleaned.splitlines():
+        if _GHL_TYPE_MARKER_RE.match(line):
+            continue
+        out_lines.append(line)
+    return "\n".join(out_lines).strip()
 
 
-_AUDIO_EXTS = {".mp3", ".ogg", ".oga", ".m4a", ".wav", ".opus", ".aac", ".flac", ".webm"}
+_AUDIO_EXTS = {".mp3", ".ogg", ".oga", ".m4a", ".mp4", ".wav", ".opus", ".aac", ".flac", ".webm"}
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif"}
 
 

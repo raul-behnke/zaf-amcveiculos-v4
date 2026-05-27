@@ -21,6 +21,20 @@ def test_strip_received_on() -> None:
     assert inb.strip_received_on(None) == ""
 
 
+def test_strip_voice_note_marker() -> None:
+    body = "> Voice Note < \n\nReceived on 📱[Lucas]"
+    assert inb.strip_received_on(body) == ""
+
+
+def test_strip_image_marker() -> None:
+    assert inb.strip_received_on("> Image <\n\nReceived on 📱[Lucas]") == ""
+
+
+def test_strip_whatsapp_quote() -> None:
+    body = "↪︎ Tem sim garantia.\nVai usar troca?\n\nTenho um Gol 2001\n\nReceived on 📱[Lucas]"
+    assert inb.strip_received_on(body) == "Tenho um Gol 2001"
+
+
 def test_parse_tags_csv() -> None:
     assert inb.parse_tags_csv("a,b, c") == {"a", "b", "c"}
     assert inb.parse_tags_csv(["x", "y"]) == {"x", "y"}
@@ -35,9 +49,14 @@ def test_classify_attachments() -> None:
         "https://x/doc.pdf",
         "https://x/audio2.opus",
         "https://x/img.PNG",
+        "https://api.zoitech.com.br/conversations-assets/uuid.mp4",
     ]
     c = inb.classify_attachments(urls)
-    assert set(c["audio"]) == {"https://x/audio.ogg", "https://x/audio2.opus"}
+    assert set(c["audio"]) == {
+        "https://x/audio.ogg",
+        "https://x/audio2.opus",
+        "https://api.zoitech.com.br/conversations-assets/uuid.mp4",
+    }
     assert set(c["image"]) == {"https://x/foto.jpg", "https://x/img.PNG"}
     assert c["other"] == ["https://x/doc.pdf"]
 
