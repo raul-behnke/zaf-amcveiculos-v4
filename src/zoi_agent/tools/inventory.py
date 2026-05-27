@@ -322,12 +322,28 @@ def _index_by_id(inv: list[dict]) -> dict[str, dict]:
 # --- search_inventory -----------------------------------------------------
 
 
-async def search_inventory(query: str) -> SearchResult:
+async def search_inventory(
+    query: str,
+    *,
+    exclude_ids: list[str] | None = None,
+) -> SearchResult:
+    """Busca no estoque com filtros extraídos por mini-LLM.
+
+    `exclude_ids` remove veículos já apresentados (state.vehicles_shown) tanto
+    dos exatos quanto dos candidatos a parecidos. Evita repetir veículo numa
+    nova rodada de "tem mais?" / "outro?".
+    """
     inv = await load_inventory()
     filters = await extract_filters(query)
-    log.info("inventory_filters", query=query, filters=filters.model_dump(exclude_none=True))
+    log.info(
+        "inventory_filters",
+        query=query,
+        filters=filters.model_dump(exclude_none=True),
+        exclude=len(exclude_ids or []),
+    )
 
-    exatos_raw = apply_filters(inv, filters)
+    excl: set[str] = set(exclude_ids or [])
+    exatos_raw = [v for v in apply_filters(inv, filters) if v.get("external_id") not in excl]
     limit = filters.limit or settings.inventory_search_limit
 
     if len(exatos_raw) >= limit:
@@ -337,9 +353,13 @@ async def search_inventory(query: str) -> SearchResult:
             total=len(exatos_raw),
         )
 
-    # Restringe candidatos a parecidos: tudo que não está em exatos
+    # Restringe candidatos a parecidos: tudo que não está em exatos nem excl
     exatos_ids = {v["external_id"] for v in exatos_raw}
-    candidatos = [v for v in inv if v.get("external_id") not in exatos_ids]
+    candidatos = [
+        v for v in inv
+        if v.get("external_id") not in exatos_ids
+        and v.get("external_id") not in excl
+    ]
     remaining = limit - len(exatos_raw)
     similares = await select_similar(query, candidatos, remaining)
     idx = _index_by_id(inv)

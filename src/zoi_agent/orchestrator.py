@@ -131,7 +131,15 @@ async def _dispatch_tools(
             out["faq_yaml"] = ""
     if update_intent_sec == "ver_outros_carros":
         try:
-            res = await search_inventory(last_message)
+            # Query âncora: combina o foco atual (state.collected.veiculo_interesse)
+            # com a fala do lead. Resolve "Oque mais?" (vago) -> mantém categoria.
+            # Se ambos existirem, mini-LLM vê os dois e prioriza coerência.
+            anchor = state.collected.veiculo_interesse or ""
+            query = f"{anchor} {last_message}".strip() if anchor else last_message
+            res = await search_inventory(
+                query,
+                exclude_ids=list(state.vehicles_shown or []),
+            )
             out["search_results"] = res.model_dump()
         except Exception as e:
             log.error("search_inventory_failed", err=str(e))
