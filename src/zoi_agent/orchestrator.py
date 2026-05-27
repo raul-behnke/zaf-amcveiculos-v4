@@ -25,6 +25,7 @@ from zoi_agent.db import sessions as session_repo
 from zoi_agent.ghl import conversations as ghl_conv
 from zoi_agent.logging import get_logger
 from zoi_agent.metrics import TURNS_TOTAL
+from zoi_agent.tools.calendar import book_appointment, propose_slots
 from zoi_agent.tools.faq import get_faq_raw
 from zoi_agent.tools.handoff import encaminhar_para_vendedor
 from zoi_agent.tools.inventory import search_inventory
@@ -84,6 +85,24 @@ async def _dispatch_tools(
         except Exception as e:
             log.error("search_inventory_failed", err=str(e))
             out["search_results"] = {"error": str(e)}
+    # Gate duplo de agendamento (PLAN §11):
+    # interesse_agendamento=true AND vehicle_focus_definido=true
+    quer_agendar = bool(state.collected.interesse_agendamento)
+    focus_ok = bool(state.collected.vehicle_focus_definido)
+    if quer_agendar and focus_ok:
+        pref = None
+        # preferencia vem do update; mas só vemos isso no dispatcher novo (não temos
+        # update aqui). Vamos propor sem filtro de pref e o responder ordena.
+        try:
+            slots = await propose_slots(limit=3)
+            out["slots"] = [{"iso": s.iso, "label": s.label_pt()} for s in slots]
+        except Exception as e:
+            log.error("propose_slots_failed", err=str(e))
+            out["slots"] = []
+    elif quer_agendar and not focus_ok:
+        # C19: lead quer agendar mas sem foco -> agente puxa foco antes
+        out["agendamento_gate"] = {"motivo": "vehicle_focus_definido=false"}
+
     if update_intent_sec == "pedido_foto":
         try:
             out["photos"] = await build_photo_payload(
@@ -211,6 +230,33 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
         last_message=last_message,
         state=new_state,
     )
+
+    # Booking: lead aceitou slot proposto -> book ANTES do responder
+    if update.chosen_slot_iso:
+        try:
+            modelo = new_state.collected.veiculo_interesse
+            booked = await book_appointment(
+                contact_id=contact_id,
+                slot_iso=update.chosen_slot_iso,
+                lead_name=new_state.collected.nome,
+                modelo=modelo,
+            )
+            new_state.appointment = {
+                "slot_iso": update.chosen_slot_iso,
+                "id": (booked.get("appointment") or {}).get("id") or booked.get("id"),
+                "modelo": modelo,
+            }
+            tools["booking"] = {"ok": True, "slot": update.chosen_slot_iso}
+            # Promove terminal_reason se updater não tiver setado
+            if not update.terminal_reason:
+                update.terminal_reason = "qualificado_agendado"
+        except Exception as e:
+            log.error("book_appointment_failed", err=str(e))
+            tools["booking"] = {"ok": False, "error": str(e)}
+            # PLAN §11 conflito de slot -> handoff_erro
+            if not update.terminal_reason:
+                update.terminal_reason = "handoff_erro"
+                update.handoff_reason = f"conflito ao bookar slot: {e}"
 
     bubbles = await run_responder(
         state=new_state,

@@ -76,6 +76,15 @@ Regressão de stage é permitida (lead pode pedir ver outro carro em fechamento)
 REGRA OBRIGATÓRIA: se `should_handoff=true`, então `terminal_reason` DEVE ser preenchido
 (normalmente "handoff_solicitado"). Não deixe null nesse caso.
 
+# Slot escolhido pra agendamento
+- `chosen_slot_iso` SÓ é preenchido quando, no turno anterior, o agente propôs slots
+  específicos (visíveis no histórico) E o lead aceitou explicitamente um deles
+  (ex: "pode ser quinta 09:30", "o primeiro tá ok", "amanhã 10 horas serve").
+- Use exatamente o ISO8601 com offset (-03:00) que aparece no histórico/proposta.
+- Em qualquer outra situação: `chosen_slot_iso=null`.
+- Se o lead deu preferência VAGA (apenas "amanhã de manhã"), preencha
+  `preferencia_horario` em vez de chosen_slot_iso.
+
 # Importante
 - Seja conservador: não invente dados. Se o lead foi vago, deixe campo null.
 - Não duplicar contagem: deltas são 0 ou 1 por turno.

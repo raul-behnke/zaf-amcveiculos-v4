@@ -156,6 +156,68 @@ async def test_terminal_handoff_dispara_tool(monkeypatch, patch_deps) -> None:
 
 
 @pytest.mark.asyncio
+async def test_chosen_slot_dispara_book(monkeypatch, patch_deps) -> None:
+    """update.chosen_slot_iso -> book_appointment chamado e terminal_reason=qualificado_agendado."""
+    book_mock = AsyncMock(return_value={"appointment": {"id": "apt-9"}})
+    monkeypatch.setattr(orch, "book_appointment", book_mock)
+
+    async def upd_with_slot(*, history, state, last_message):
+        return StateUpdate(
+            stage="fechamento",
+            collected=Collected(nome="Raul", veiculo_interesse="Duster"),
+            missing=[],
+            next_action="confirmar agendamento",
+            sentiment="positivo",
+            intent="agendamento",
+            chosen_slot_iso="2026-06-03T09:30:00-03:00",
+        )
+
+    monkeypatch.setattr(orch, "run_updater", upd_with_slot)
+
+    task = await orch.process_turn("c1", "pode ser 03/06 09:30")
+    await task
+
+    book_mock.assert_awaited_once()
+    kwargs = book_mock.await_args.kwargs
+    assert kwargs["slot_iso"] == "2026-06-03T09:30:00-03:00"
+    assert kwargs["lead_name"] == "Raul"
+    assert kwargs["modelo"] == "Duster"
+
+    saved = patch_deps["store"]["c1"]
+    assert saved.terminal_reason == "qualificado_agendado"
+    assert saved.appointment["id"] == "apt-9"
+    assert saved.stage == "fechado"
+
+
+@pytest.mark.asyncio
+async def test_book_fail_vira_handoff_erro(monkeypatch, patch_deps) -> None:
+    book_mock = AsyncMock(side_effect=RuntimeError("slot ocupado"))
+    handoff_mock = AsyncMock(return_value={"tag_removed": True, "note_created": True, "workflow_added": True})
+    monkeypatch.setattr(orch, "book_appointment", book_mock)
+    monkeypatch.setattr(orch, "encaminhar_para_vendedor", handoff_mock)
+
+    async def upd_with_slot(*, history, state, last_message):
+        return StateUpdate(
+            stage="fechamento",
+            collected=Collected(nome="Raul", veiculo_interesse="Duster"),
+            missing=[],
+            next_action="x",
+            sentiment="positivo",
+            intent="agendamento",
+            chosen_slot_iso="2026-06-03T09:30:00-03:00",
+        )
+
+    monkeypatch.setattr(orch, "run_updater", upd_with_slot)
+
+    task = await orch.process_turn("c1", "pode ser 03/06 09:30")
+    await task
+
+    handoff_mock.assert_awaited_once()
+    assert handoff_mock.await_args.kwargs["terminal_reason"] == "handoff_erro"
+    assert patch_deps["store"]["c1"].terminal_reason == "handoff_erro"
+
+
+@pytest.mark.asyncio
 async def test_terminal_qualificado_nao_dispara_handoff_em_S11(monkeypatch, patch_deps) -> None:
     """terminal_reason=qualificado_agendado fica pra S13; orchestrator S11 só chama
     handoff em {handoff_solicitado, handoff_erro}."""

@@ -65,6 +65,10 @@ class StateUpdate(BaseModel):
         description="Quando aplicável: qualificado_agendado, qualificado_sem_agenda, handoff_solicitado, handoff_erro",
     )
     preferencia_horario: PreferenciaHorario | None = None
+    chosen_slot_iso: str | None = Field(
+        default=None,
+        description="ISO8601 com offset. Preenchido SOMENTE quando o lead aceitou explicitamente um dos slots propostos no turno anterior.",
+    )
     humano_solicitado_count_delta: int = Field(
         default=0,
         description="Incremento (0 ou 1) — usado pra atualizar contador na sessão",
