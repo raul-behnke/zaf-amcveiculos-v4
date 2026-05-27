@@ -52,6 +52,8 @@ não só de respostas diretas. Exemplos:
   - "vou financiar" → forma_pagamento="financiado"
   - "queria à vista" → forma_pagamento="a_vista"
   - "tô pensando em comprar direto" → intencao="compra_direta"
+  - "quero algo mais novo" / "quero algo mais econômico" / "preciso de mais espaço"
+    / "tô precisando trocar porque ficou pequeno" → motivo_compra_ou_troca=<frase do lead>
 
 REGRAS RÍGIDAS:
   - Só infira se a menção for INEQUÍVOCA. Em dúvida, deixe null.
@@ -62,6 +64,17 @@ REGRAS RÍGIDAS:
     não re-perguntar o que já saiu por inferência.
     Ex: lead diz "aceitam troca?" → next_action="confirmar troca e puxar modelo/ano",
     NÃO "perguntar intenção".
+
+# DESEJOS ABSTRATOS NÃO MUDAM FOCO
+- Quando `vehicle_focus_definido=true` E o lead expressa um desejo ABSTRATO sobre
+  veículos ("quero algo mais novo", "mais econômico", "com câmbio automático",
+  "com mais espaço", "que gaste menos"), isso é MOTIVO ou CRITÉRIO de compra,
+  NUNCA pedido de nova busca.
+- NÃO mude `intent` pra "apresentar". NÃO mude `intent_secundario` pra
+  "ver_outros_carros". NÃO regrida `vehicle_focus_definido` pra false.
+- Use a frase como `motivo_compra_ou_troca` e continue qualificando o funil.
+- Só mude foco quando lead pedir EXPLICITAMENTE outro veículo
+  ("quero ver outro", "tem outro?", "me mostra mais opções", "não quero esse").
 
 # Funil PRIORITY (ordem fixa)
 Estes 10 campos devem ser preenchidos nesta ordem:
