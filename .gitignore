@@ -17,3 +17,4 @@ htmlcov/
 .vscode/
 postgres_data/
 *.log
+payloads/
