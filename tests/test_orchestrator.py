@@ -62,7 +62,7 @@ def patch_deps(monkeypatch):
     monkeypatch.setattr(orch.settings, "responder_sleep_max", 0.0)
 
     # tools
-    async def fake_dispatch(*, update_intent_sec, last_message):
+    async def fake_dispatch(*, update_intent_sec, last_message, state):
         return {}
 
     monkeypatch.setattr(orch, "_dispatch_tools", fake_dispatch)

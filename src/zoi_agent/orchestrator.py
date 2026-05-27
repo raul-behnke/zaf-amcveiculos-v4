@@ -27,6 +27,7 @@ from zoi_agent.logging import get_logger
 from zoi_agent.metrics import TURNS_TOTAL
 from zoi_agent.tools.faq import get_faq_raw
 from zoi_agent.tools.inventory import search_inventory
+from zoi_agent.tools.photos import build_photo_payload
 
 log = get_logger(__name__)
 
@@ -59,7 +60,10 @@ def cancel_existing(contact_id: str) -> None:
 
 
 async def _dispatch_tools(
-    *, update_intent_sec: str | None, last_message: str
+    *,
+    update_intent_sec: str | None,
+    last_message: str,
+    state,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {}
     if update_intent_sec == "duvida_operacional":
@@ -75,6 +79,17 @@ async def _dispatch_tools(
         except Exception as e:
             log.error("search_inventory_failed", err=str(e))
             out["search_results"] = {"error": str(e)}
+    if update_intent_sec == "pedido_foto":
+        try:
+            out["photos"] = await build_photo_payload(
+                last_message=last_message, state=state
+            )
+        except Exception as e:
+            log.error("photos_payload_failed", err=str(e))
+            out["photos"] = {
+                "available": False, "vehicle": None, "images": [],
+                "single_image_only": False, "will_send_count": 0,
+            }
     return out
 
 
@@ -92,11 +107,55 @@ async def _send_bubble(
     )
 
 
-async def _send_bubbles(
-    *, contact_id: str, conversation_id: str | None, bubbles: list[str]
+async def _send_photo(
+    *, contact_id: str, conversation_id: str | None, url: str
 ) -> None:
-    """Envia sequencial com sleeps 0.6-1.2s entre bolhas. Pula bolhas que falham
-    persistentemente (tenacity do client já tenta 3x)."""
+    """Envia 1 foto (sem texto). PLAN §5: type SMS, attachments=[url]."""
+    await ghl_conv.send_message(
+        contact_id=contact_id,
+        conversation_id=conversation_id,
+        attachments=[url],
+    )
+
+
+async def _send_photos_parallel(
+    *, contact_id: str, conversation_id: str | None, urls: list[str]
+) -> int:
+    """Envia N fotos via asyncio.gather (paralelo). PLAN: return_exceptions=True.
+    Retorna quantas foram enviadas com sucesso."""
+    if not urls:
+        return 0
+    results = await asyncio.gather(
+        *(
+            _send_photo(contact_id=contact_id, conversation_id=conversation_id, url=u)
+            for u in urls
+        ),
+        return_exceptions=True,
+    )
+    ok = 0
+    for i, r in enumerate(results):
+        if isinstance(r, Exception):
+            log.error("photo_send_failed", idx=i, url=urls[i], err=str(r))
+        else:
+            ok += 1
+    log.info("photos_sent", total=len(urls), ok=ok)
+    return ok
+
+
+async def _send_bubbles(
+    *,
+    contact_id: str,
+    conversation_id: str | None,
+    bubbles: list[str],
+    photos: list[str] | None = None,
+) -> None:
+    """1) Fotos paralelo (se houver). 2) Wait 1s. 3) Bolhas sequencial com sleeps 0.6-1.2s.
+    Pula bolhas que falham persistentemente (tenacity do client já tenta 3x)."""
+    if photos:
+        await _send_photos_parallel(
+            contact_id=contact_id, conversation_id=conversation_id, urls=photos
+        )
+        await asyncio.sleep(1.0)
     for i, b in enumerate(bubbles):
         try:
             await _send_bubble(contact_id=contact_id, conversation_id=conversation_id, text=b)
@@ -143,7 +202,9 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
     new_state = merge_into_state(state, update)
 
     tools = await _dispatch_tools(
-        update_intent_sec=update.intent_secundario, last_message=last_message
+        update_intent_sec=update.intent_secundario,
+        last_message=last_message,
+        state=new_state,
     )
 
     bubbles = await run_responder(
@@ -154,10 +215,23 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
         tool_outputs=tools,
     )
 
+    # Fotos a enviar (paralelo) + bolhas
+    photo_urls: list[str] = []
+    photos_payload = tools.get("photos") or {}
+    if photos_payload.get("images"):
+        photo_urls = list(photos_payload["images"])
+        # Marca vehicle como mostrado
+        vid = (photos_payload.get("vehicle") or {}).get("external_id")
+        if vid and vid not in new_state.vehicles_shown:
+            new_state.vehicles_shown.append(vid)
+
     # Send phase sob shield: não pode ser cancelado por nova preempção no meio.
     await asyncio.shield(
         _send_bubbles(
-            contact_id=contact_id, conversation_id=conversation_id, bubbles=bubbles
+            contact_id=contact_id,
+            conversation_id=conversation_id,
+            bubbles=bubbles,
+            photos=photo_urls,
         )
     )
 
