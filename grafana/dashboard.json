@@ -1,0 +1,133 @@
+{
+  "title": "ZOI — AMC Veículos",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-24h", "to": "now"},
+  "timezone": "America/Sao_Paulo",
+  "tags": ["zoi", "amc"],
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {"text": "Prometheus", "value": "Prometheus"}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Turnos / 5min",
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "sum(rate(zoi_turns_total[5m])) * 60", "legendFormat": "turns/min"}
+      ],
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Qualificados (24h)",
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "sum(increase(zoi_qualificados_total[24h]))", "legendFormat": "total"},
+        {"expr": "sum(increase(zoi_qualificados_total{com_agenda=\"sim\"}[24h]))", "legendFormat": "com agenda"},
+        {"expr": "sum(increase(zoi_qualificados_total{com_agenda=\"nao\"}[24h]))", "legendFormat": "sem agenda"}
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Handoffs (24h)",
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "sum(increase(zoi_handoff_total{reason=~\"handoff_.*\"}[24h]))", "legendFormat": "handoff"},
+        {"expr": "sum(increase(zoi_handoff_total{reason=\"handoff_erro\"}[24h]))", "legendFormat": "erro"}
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Latência Updater p95",
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(zoi_llm_latency_seconds_bucket{component=\"updater\"}[5m])) by (le))", "legendFormat": "p95"}
+      ]
+    },
+
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Turnos por stage (rate/min)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "sum by (stage) (rate(zoi_turns_total[5m])) * 60", "legendFormat": "{{stage}}"}
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Intent distribution",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "sum by (intent) (rate(zoi_turns_total[5m])) * 60", "legendFormat": "{{intent}}"}
+      ]
+    },
+
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Latência LLM por componente (p50/p95)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 13},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.5, sum by (le, component) (rate(zoi_llm_latency_seconds_bucket[5m])))", "legendFormat": "{{component}} p50"},
+        {"expr": "histogram_quantile(0.95, sum by (le, component) (rate(zoi_llm_latency_seconds_bucket[5m])))", "legendFormat": "{{component}} p95"}
+      ]
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "GHL request latency (p50/p95)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 13},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.5, sum by (le, operation) (rate(zoi_ghl_request_latency_seconds_bucket[5m])))", "legendFormat": "{{operation}} p50"},
+        {"expr": "histogram_quantile(0.95, sum by (le, operation) (rate(zoi_ghl_request_latency_seconds_bucket[5m])))", "legendFormat": "{{operation}} p95"}
+      ]
+    },
+
+    {
+      "id": 30,
+      "type": "barchart",
+      "title": "Handoff por reason (24h)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 21},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "sum by (reason) (increase(zoi_handoff_total[24h]))", "legendFormat": "{{reason}}"}
+      ]
+    },
+    {
+      "id": 31,
+      "type": "barchart",
+      "title": "Qualificados por desfecho (24h)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 21},
+      "datasource": {"type": "prometheus", "uid": "${datasource}"},
+      "targets": [
+        {"expr": "sum by (com_agenda) (increase(zoi_qualificados_total[24h]))", "legendFormat": "{{com_agenda}}"}
+      ]
+    }
+  ]
+}

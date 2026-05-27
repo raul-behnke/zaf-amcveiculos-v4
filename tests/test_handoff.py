@@ -57,6 +57,30 @@ async def test_handoff_partial_failure_tag(patches) -> None:
 
 
 @pytest.mark.asyncio
+async def test_qualificados_counter_agendado(patches) -> None:
+    from zoi_agent.metrics import QUALIFICADOS_TOTAL
+
+    before = QUALIFICADOS_TOTAL.labels(com_agenda="sim")._value.get()
+    await h.encaminhar_para_vendedor(
+        contact_id="c1", state=_state(), terminal_reason="qualificado_agendado"
+    )
+    after = QUALIFICADOS_TOTAL.labels(com_agenda="sim")._value.get()
+    assert after - before == 1
+
+
+@pytest.mark.asyncio
+async def test_qualificados_counter_sem_agenda(patches) -> None:
+    from zoi_agent.metrics import QUALIFICADOS_TOTAL
+
+    before = QUALIFICADOS_TOTAL.labels(com_agenda="nao")._value.get()
+    await h.encaminhar_para_vendedor(
+        contact_id="c1", state=_state(), terminal_reason="qualificado_sem_agenda"
+    )
+    after = QUALIFICADOS_TOTAL.labels(com_agenda="nao")._value.get()
+    assert after - before == 1
+
+
+@pytest.mark.asyncio
 async def test_handoff_partial_failure_workflow(patches) -> None:
     patches["wf"].side_effect = RuntimeError("workflow gone")
     res = await h.encaminhar_para_vendedor(

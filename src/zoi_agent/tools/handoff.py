@@ -15,7 +15,7 @@ from zoi_agent.config import settings
 from zoi_agent.ghl import contacts as gc
 from zoi_agent.ghl import workflows as gw
 from zoi_agent.logging import get_logger
-from zoi_agent.metrics import HANDOFF_TOTAL
+from zoi_agent.metrics import HANDOFF_TOTAL, QUALIFICADOS_TOTAL
 from zoi_agent.tools.terminal import build_consolidated_note
 
 log = get_logger(__name__)
@@ -61,6 +61,10 @@ async def encaminhar_para_vendedor(
         log.error("terminal_workflow_failed", contact_id=contact_id, err=str(e))
 
     HANDOFF_TOTAL.labels(reason=terminal_reason).inc()
+    if terminal_reason == "qualificado_agendado":
+        QUALIFICADOS_TOTAL.labels(com_agenda="sim").inc()
+    elif terminal_reason == "qualificado_sem_agenda":
+        QUALIFICADOS_TOTAL.labels(com_agenda="nao").inc()
     log.info(
         "terminal_action_done",
         contact_id=contact_id,
