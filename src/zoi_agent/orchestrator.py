@@ -29,6 +29,7 @@ from zoi_agent.tools.calendar import book_appointment, propose_slots
 from zoi_agent.tools.faq import get_faq_raw
 from zoi_agent.tools.handoff import encaminhar_para_vendedor
 from zoi_agent.tools.inventory import search_inventory
+from zoi_agent.tools.origem import buscar_veiculo_interesse_origem, collect_external_ids
 from zoi_agent.tools.photos import build_photo_payload
 from zoi_agent.tools.terminal import TERMINAL_REASONS
 
@@ -69,6 +70,21 @@ async def _dispatch_tools(
     state,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {}
+
+    # PRIORITÁRIO: origem ainda não apresentada -> traz matches do estoque
+    # ANTES de qualificar (PLAN §5 buscar_veiculo_interesse_origem + §16 C4)
+    if (
+        state.veiculo_origem
+        and not state.origem_apresentada
+        and state.stage in ("abertura", "descoberta")
+    ):
+        try:
+            origem = await buscar_veiculo_interesse_origem(state)
+            if origem:
+                out["origem_matches"] = origem
+        except Exception as e:
+            log.error("origem_dispatch_failed", err=str(e))
+
     if update_intent_sec == "duvida_operacional":
         try:
             out["faq_yaml"] = await get_faq_raw()
@@ -313,6 +329,13 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
         vid = (photos_payload.get("vehicle") or {}).get("external_id")
         if vid and vid not in new_state.vehicles_shown:
             new_state.vehicles_shown.append(vid)
+
+    # Origem apresentada: marca gate + acumula external_ids em vehicles_shown
+    if tools.get("origem_matches"):
+        new_state.origem_apresentada = True
+        for eid in collect_external_ids(tools["origem_matches"]):
+            if eid not in new_state.vehicles_shown:
+                new_state.vehicles_shown.append(eid)
 
     # Send phase sob shield: não pode ser cancelado por nova preempção no meio.
     await asyncio.shield(

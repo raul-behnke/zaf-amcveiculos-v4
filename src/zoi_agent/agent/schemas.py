@@ -89,6 +89,7 @@ class SessionState(BaseModel):
     stage: Stage = "abertura"
     greeted: bool = False
     veiculo_origem: VeiculoOrigem | None = None
+    origem_apresentada: bool = False
     collected: Collected = Field(default_factory=Collected)
     vehicles_shown: list[str] = Field(default_factory=list)
     humano_solicitado_count: int = 0

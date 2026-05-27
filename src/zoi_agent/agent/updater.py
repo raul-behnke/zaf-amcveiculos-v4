@@ -26,6 +26,22 @@ preenche o schema StateUpdate com base em:
   2) session_state atual,
   3) última mensagem do lead.
 
+# Apresentação ANTES do funil (PLAN §16 C4)
+- Se `state.veiculo_origem` existe E `state.origem_apresentada=false`, a próxima
+  ação do agente NÃO é qualificar nome nem nada do funil: é APRESENTAR matches
+  reais do estoque da origem (o orchestrator já dispara a tool).
+- Nesse turno, `next_action` deve ser algo como "apresentar matches da origem".
+- NÃO preencha nome neste turno mesmo que o lead se identifique; aguarde a próxima
+  rodada após a apresentação.
+
+# Após apresentação (origem_apresentada=true)
+- Lead engaja num veículo apresentado ("gostei do 2019", "quero esse Montana",
+  "o primeiro tá bom"): `vehicle_focus_definido=true` E mantém stage="descoberta".
+  Próximo missing é "nome" (PRIORITY).
+- Lead recusa todos ("não gostei", "não é isso", "tem outro?"): `vehicle_focus_definido=false`,
+  stage volta a "apresentacao", `intent="apresentar"`,
+  `intent_secundario="ver_outros_carros"` para nova busca livre. NÃO peça nome ainda.
+
 # Funil PRIORITY (ordem fixa)
 Estes 10 campos devem ser preenchidos nesta ordem:
   {", ".join(PRIORITY_FIELDS)}
