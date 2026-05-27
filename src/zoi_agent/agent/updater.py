@@ -42,6 +42,27 @@ preenche o schema StateUpdate com base em:
   stage volta a "apresentacao", `intent="apresentar"`,
   `intent_secundario="ver_outros_carros"` para nova busca livre. NÃO peça nome ainda.
 
+# INFERÊNCIA CONTEXTUAL (alta confiança apenas)
+Extraia campos a partir de PERGUNTAS, MENÇÕES INCIDENTAIS e CONTEXTO,
+não só de respostas diretas. Exemplos:
+  - "vocês aceitam troca?" → intencao="troca", possui_troca=true
+  - "tenho um Gol 2010 quitado" → possui_troca=true,
+    troca_completa={{modelo:"Gol", ano:2010, quitado:true}}
+  - "moro em Joinville" → cidade="Joinville"
+  - "vou financiar" → forma_pagamento="financiado"
+  - "queria à vista" → forma_pagamento="a_vista"
+  - "tô pensando em comprar direto" → intencao="compra_direta"
+
+REGRAS RÍGIDAS:
+  - Só infira se a menção for INEQUÍVOCA. Em dúvida, deixe null.
+  - HIPOTÉTICOS NÃO INFEREM: "se eu trocasse", "se for o caso", "imagina se",
+    "e se eu...". Esses são exploratórios — NÃO atualize campos por causa deles.
+  - NUNCA re-pergunte campo já preenchido no state.collected (mesmo que via inferência).
+  - `next_action` deve CONFIRMAR discretamente o inferido e puxar o PRÓXIMO missing,
+    não re-perguntar o que já saiu por inferência.
+    Ex: lead diz "aceitam troca?" → next_action="confirmar troca e puxar modelo/ano",
+    NÃO "perguntar intenção".
+
 # Funil PRIORITY (ordem fixa)
 Estes 10 campos devem ser preenchidos nesta ordem:
   {", ".join(PRIORITY_FIELDS)}

@@ -78,14 +78,16 @@ Você é o "Lucas", atendente virtual da AMC Veículos (seminovos, Joinville/SC,
 - Turnos em sequência podem ir direto sem âncora — soa mais humano.
 
 # Regras de turno
-- Se `tools.origem_matches` está presente (1ª apresentação pós-saudação com
-  veículo de origem do CRM): apresente até 2 matches reais do estoque (preferindo
-  os de `matches.exatos`; se vazio, use `matches.parecidos` com o motivo).
-  Cada veículo em UMA bolha (titulo curto + ano + R$ preço + km).
-  Última bolha = pergunta de foco do tipo "algum desses te chamou atenção?",
-  "qual deles faz mais sentido?". NÃO peça nome neste turno (PLAN §16 C4).
-  Apresentação curta — proibido começar com "Vi que você se interessou no..."
-  ou similar (o lead já leu a saudação).
+- Se `tools.pre_bubbles` (lista) está presente: o orquestrador já preparou as
+  bolhas com os veículos formatados (card ou lista). Sua função neste turno é
+  gerar APENAS 1 bolha: a pergunta de avanço (foco "algum desses chamou atenção?"
+  ou próxima pergunta do funil). NÃO reescreva nem repita os dados dos veículos
+  — eles já estão na bolha anterior. NÃO comece com "Vi que você se interessou".
+- Se updater inferiu campos a partir de menção/pergunta do lead (collected
+  mudou sem você ter perguntado), CONFIRME o inferido naturalmente em vez de
+  re-perguntar. Ex: lead disse "aceitam troca?" → updater extraiu intencao=troca
+  e possui_troca=true → você diz "Show, troca então. Me passa modelo e ano do
+  seu atual?" (NÃO pergunta "qual sua intenção?").
 - SEMPRE responde a dúvida/intenção do lead COM o dado da tool quando houver,
   E avança 1 campo do funil na última bolha.
 - Se `intent_secundario=duvida_operacional` e `faq_yaml` está no input, use APENAS dados do FAQ
@@ -156,17 +158,20 @@ def _build_user_payload(
         }
         for m in history[-10:]
     ]
-    return json.dumps(
-        {
-            "state": state.model_dump(),
-            "update": update.model_dump(),
-            "history_recent": hist_compact,
-            "last_message": last_message,
-            "tools": tool_outputs or {},
-        },
-        ensure_ascii=False,
-        default=str,
-    )
+    payload: dict[str, Any] = {
+        "state": state.model_dump(),
+        "update": update.model_dump(),
+        "history_recent": hist_compact,
+        "last_message": last_message,
+        "tools": tool_outputs or {},
+    }
+    # Dica explícita pra ele gerar SÓ a pergunta quando há pre_bubbles
+    if tool_outputs and tool_outputs.get("pre_bubbles"):
+        payload["instrucao_turno"] = (
+            "tools.pre_bubbles JÁ contém as bolhas com veículos prontas pra envio. "
+            "Você deve gerar EXATAMENTE 1 bolha de pergunta de avanço, sem separador |||."
+        )
+    return json.dumps(payload, ensure_ascii=False, default=str)
 
 
 async def run_responder(

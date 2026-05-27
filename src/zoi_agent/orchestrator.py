@@ -19,6 +19,7 @@ from typing import Any
 
 from zoi_agent.agent.responder import run_responder
 from zoi_agent.agent.schemas import SessionState
+from zoi_agent.agent.templates import build_vehicle_blocks
 from zoi_agent.agent.updater import merge_into_state, run_updater
 from zoi_agent.config import settings
 from zoi_agent.db import sessions as session_repo
@@ -98,6 +99,22 @@ async def _dispatch_tools(
         except Exception as e:
             log.error("search_inventory_failed", err=str(e))
             out["search_results"] = {"error": str(e)}
+
+    # Pre-render templates determinísticos: prepende ao envio antes das bolhas
+    # do responder. Reduz token, mantém visual consistente.
+    pre_bubbles: list[str] = []
+    if out.get("origem_matches"):
+        m = (out["origem_matches"] or {}).get("matches") or {}
+        exatos = m.get("exatos") or []
+        parecidos = [p.get("vehicle") for p in (m.get("parecidos") or []) if p.get("vehicle")]
+        pre_bubbles.extend(build_vehicle_blocks(exatos=exatos, parecidos=parecidos))
+    elif out.get("search_results") and not out["search_results"].get("error"):
+        sr = out["search_results"]
+        exatos = sr.get("exatos") or []
+        parecidos = [p.get("vehicle") for p in (sr.get("parecidos") or []) if p.get("vehicle")]
+        pre_bubbles.extend(build_vehicle_blocks(exatos=exatos, parecidos=parecidos))
+    if pre_bubbles:
+        out["pre_bubbles"] = pre_bubbles
     # Gate duplo de agendamento (PLAN §11):
     # interesse_agendamento=true AND vehicle_focus_definido=true
     quer_agendar = bool(state.collected.interesse_agendamento)
@@ -319,6 +336,13 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
         except Exception as e3:
             log.error("state_save_failed", err=str(e3))
         return
+
+    # Prepende bolhas pré-renderizadas (templates Python) antes das do responder.
+    # Mantém ordem: [pre_bubbles..., bolha de pergunta do responder].
+    pre_bubbles = tools.get("pre_bubbles") or []
+    if pre_bubbles:
+        bubbles = list(pre_bubbles) + list(bubbles)
+        bubbles = bubbles[: settings.responder_max_bubbles + len(pre_bubbles)]
 
     # Fotos a enviar (paralelo) + bolhas
     photo_urls: list[str] = []

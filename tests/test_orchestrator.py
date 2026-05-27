@@ -365,6 +365,93 @@ async def test_c4_2_lead_recusa_volta_apresentacao(monkeypatch, patch_deps) -> N
 
 
 @pytest.mark.asyncio
+async def test_c29_pre_bubble_card_um_veiculo(monkeypatch, patch_deps) -> None:
+    """C29: 1 veículo no origem_matches -> card rico prepende às bolhas."""
+    from zoi_agent.agent.schemas import VeiculoOrigem
+
+    patch_deps["store"]["c1"] = SessionState(
+        stage="abertura", greeted=True,
+        veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
+        origem_apresentada=False,
+    )
+
+    async def real_dispatch(*, update_intent_sec, last_message, state):
+        out: dict = {}
+        if state.veiculo_origem and not state.origem_apresentada:
+            out["origem_matches"] = {
+                "texto_origem": "Chevrolet Montana",
+                "matches": {
+                    "exatos": [{
+                        "external_id": "m1", "titulo": "Chevrolet Montana LS",
+                        "marca": "Chevrolet", "modelo": "Montana",
+                        "ano": 2018, "preco": 49900,
+                        "quilometragem": 140000, "cambio": "Manual",
+                        "combustivel": "Flex", "opcionais": ["AC", "DH"],
+                    }],
+                    "parecidos": [],
+                },
+            }
+            from zoi_agent.agent.templates import build_vehicle_blocks
+            out["pre_bubbles"] = build_vehicle_blocks(exatos=out["origem_matches"]["matches"]["exatos"])
+        return out
+
+    async def responder_only_question(*, state, update, history, last_message, tool_outputs):
+        return ["Algum desses te chamou atenção?"]
+
+    monkeypatch.setattr(orch, "_dispatch_tools", real_dispatch)
+    monkeypatch.setattr(orch, "run_responder", responder_only_question)
+
+    task = await orch.process_turn("c1", "oi pode sim")
+    await task
+
+    sent = patch_deps["sent"]
+    assert any("🚗" in s and "Chevrolet Montana LS" in s for s in sent)
+    assert any("Algum desses te chamou atenção?" in s for s in sent)
+    # ordem: card primeiro, pergunta depois
+    card_idx = next(i for i, s in enumerate(sent) if "🚗" in s)
+    q_idx = next(i for i, s in enumerate(sent) if "Algum desses" in s)
+    assert card_idx < q_idx
+
+
+@pytest.mark.asyncio
+async def test_c30_pre_bubble_lista_dois_mais(monkeypatch, patch_deps) -> None:
+    """C30: 2+ veículos -> lista compacta numerada."""
+    from zoi_agent.agent.schemas import VeiculoOrigem
+
+    patch_deps["store"]["c1"] = SessionState(
+        stage="abertura", greeted=True,
+        veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
+        origem_apresentada=False,
+    )
+
+    async def real_dispatch(*, update_intent_sec, last_message, state):
+        out: dict = {}
+        if state.veiculo_origem and not state.origem_apresentada:
+            ex = [
+                {"marca": "Chevrolet", "modelo": "Montana", "ano": 2019, "preco": 58900, "quilometragem": 95000, "cambio": "Manual"},
+                {"marca": "Chevrolet", "modelo": "Montana", "ano": 2017, "preco": 46900, "quilometragem": 120000, "cambio": "Manual"},
+            ]
+            out["origem_matches"] = {"matches": {"exatos": ex, "parecidos": []}}
+            from zoi_agent.agent.templates import build_vehicle_blocks
+            out["pre_bubbles"] = build_vehicle_blocks(exatos=ex)
+        return out
+
+    async def responder_only_question(*, state, update, history, last_message, tool_outputs):
+        return ["Qual deles faz mais sentido?"]
+
+    monkeypatch.setattr(orch, "_dispatch_tools", real_dispatch)
+    monkeypatch.setattr(orch, "run_responder", responder_only_question)
+
+    task = await orch.process_turn("c1", "manda os Montana")
+    await task
+
+    sent = patch_deps["sent"]
+    combined = " | ".join(sent)
+    assert "1️⃣" in combined and "2️⃣" in combined
+    assert "Qual deles faz mais sentido?" in combined
+
+
+@pytest.mark.asyncio
 async def test_c13_regressao_stage_apresentacao(monkeypatch, patch_deps) -> None:
     """Lead em fechamento pede outro carro -> update.stage=apresentacao -> state regride."""
     patch_deps["store"]["c1"] = SessionState(
