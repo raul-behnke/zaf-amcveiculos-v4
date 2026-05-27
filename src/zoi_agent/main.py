@@ -17,6 +17,11 @@ async def lifespan(app: FastAPI):
     try:
         ok = await db.ping()
         log.info("db_ping", ok=ok)
+        if ok:
+            from zoi_agent.db.sessions import init_schema
+
+            await init_schema()
+            log.info("db_schema_ready")
     except Exception as e:
         log.error("db_ping_failed", error=str(e))
     yield
