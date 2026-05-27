@@ -209,14 +209,13 @@ async def test_responder_falha_vira_handoff_erro(monkeypatch, patch_deps) -> Non
 
 @pytest.mark.asyncio
 async def test_c4_dispatch_origem_quando_nao_apresentada(monkeypatch, patch_deps) -> None:
-    """state com veiculo_origem + origem_apresentada=False -> dispatcher chama
+    """state com veiculo_origem + vehicles_shown vazio -> dispatcher chama
     buscar_veiculo_interesse_origem e injeta em tools."""
     from zoi_agent.agent.schemas import VeiculoOrigem
 
     patch_deps["store"]["c1"] = SessionState(
         stage="abertura", greeted=True,
         veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
-        origem_apresentada=False,
     )
 
     fake_payload = {
@@ -243,11 +242,7 @@ async def test_c4_dispatch_origem_quando_nao_apresentada(monkeypatch, patch_deps
     # neste teste pra validar o dispatch da origem.
     async def real_dispatch_with_origem(*, update_intent_sec, last_message, state):
         out: dict = {}
-        if (
-            state.veiculo_origem
-            and not state.origem_apresentada
-            and state.stage in ("abertura", "descoberta")
-        ):
+        if state.veiculo_origem and not state.vehicles_shown:
             payload = await orch.buscar_veiculo_interesse_origem(state)
             if payload:
                 out["origem_matches"] = payload
@@ -271,20 +266,18 @@ async def test_c4_dispatch_origem_quando_nao_apresentada(monkeypatch, patch_deps
     assert "origem_matches" in captured
     assert captured["origem_matches"]["texto_origem"] == "Chevrolet Montana"
     saved = patch_deps["store"]["c1"]
-    assert saved.origem_apresentada is True
     assert "m1" in saved.vehicles_shown
     assert "m2" in saved.vehicles_shown
 
 
 @pytest.mark.asyncio
 async def test_c4_skip_origem_quando_ja_apresentada(monkeypatch, patch_deps) -> None:
-    """vehicles_shown evita re-busca via origem_apresentada=True."""
+    """vehicles_shown não-vazio evita re-busca."""
     from zoi_agent.agent.schemas import VeiculoOrigem
 
     patch_deps["store"]["c1"] = SessionState(
         stage="descoberta", greeted=True,
         veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
-        origem_apresentada=True,
         vehicles_shown=["m1", "m2"],
     )
 
@@ -302,27 +295,25 @@ async def test_c4_skip_origem_quando_ja_apresentada(monkeypatch, patch_deps) -> 
     # dispatcher nem chama (gate na própria função + gate no orchestrator)
     # mas mesmo se chamasse, o retorno None bloquearia o flow
     saved = patch_deps["store"]["c1"]
-    assert saved.origem_apresentada is True
     # vehicles_shown não foi duplicado
     assert saved.vehicles_shown == ["m1", "m2"]
 
 
 @pytest.mark.asyncio
 async def test_c4_1_lead_engaja_marca_focus(monkeypatch, patch_deps) -> None:
-    """C4.1: após apresentação, lead engaja num veículo -> vehicle_focus_definido=true."""
+    """C4.1: após apresentação, lead engaja num veículo -> veiculo_interesse_confirmado=true."""
     from zoi_agent.agent.schemas import VeiculoOrigem
 
     patch_deps["store"]["c1"] = SessionState(
         stage="descoberta", greeted=True,
         veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
-        origem_apresentada=True,
         vehicles_shown=["m1", "m2"],
     )
 
     async def updater_engaja(*, history, state, last_message):
         return StateUpdate(
             stage="descoberta",
-            collected=Collected(vehicle_focus_definido=True, veiculo_interesse="Montana 2019"),
+            collected=Collected(veiculo_interesse_confirmado=True, veiculo_interesse="Montana 2019"),
             missing=["nome", "intencao"],
             next_action="perguntar nome",
             sentiment="positivo",
@@ -335,28 +326,27 @@ async def test_c4_1_lead_engaja_marca_focus(monkeypatch, patch_deps) -> None:
     await task
 
     saved = patch_deps["store"]["c1"]
-    assert saved.collected.vehicle_focus_definido is True
+    assert saved.collected.veiculo_interesse_confirmado is True
     assert saved.collected.veiculo_interesse == "Montana 2019"
 
 
 @pytest.mark.asyncio
 async def test_c4_2_lead_recusa_volta_apresentacao(monkeypatch, patch_deps) -> None:
     """C4.2: após apresentação, lead recusa todos -> stage volta pra apresentacao,
-    busca livre, vehicle_focus_definido=False, sem pedir nome ainda."""
+    busca livre, veiculo_interesse_confirmado=False, sem pedir nome ainda."""
     from zoi_agent.agent.schemas import VeiculoOrigem
 
     patch_deps["store"]["c1"] = SessionState(
         stage="descoberta", greeted=True,
         veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
-        origem_apresentada=True,
         vehicles_shown=["m1", "m2"],
     )
 
     async def updater_recusa(*, history, state, last_message):
         return StateUpdate(
             stage="apresentacao",
-            collected=Collected(vehicle_focus_definido=False),
-            missing=["veiculo_interesse", "vehicle_focus_definido"],
+            collected=Collected(veiculo_interesse_confirmado=False),
+            missing=["veiculo_interesse", "veiculo_interesse_confirmado"],
             next_action="abrir busca livre",
             sentiment="neutro",
             intent="apresentar",
@@ -370,7 +360,7 @@ async def test_c4_2_lead_recusa_volta_apresentacao(monkeypatch, patch_deps) -> N
 
     saved = patch_deps["store"]["c1"]
     assert saved.stage == "apresentacao"
-    assert saved.collected.vehicle_focus_definido is False
+    assert saved.collected.veiculo_interesse_confirmado is False
     assert saved.collected.nome is None  # ainda não pediu
 
 
@@ -382,12 +372,11 @@ async def test_c29_pre_bubble_card_um_veiculo(monkeypatch, patch_deps) -> None:
     patch_deps["store"]["c1"] = SessionState(
         stage="abertura", greeted=True,
         veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
-        origem_apresentada=False,
     )
 
     async def real_dispatch(*, update_intent_sec, last_message, state):
         out: dict = {}
-        if state.veiculo_origem and not state.origem_apresentada:
+        if state.veiculo_origem and not state.vehicles_shown:
             out["origem_matches"] = {
                 "texto_origem": "Chevrolet Montana",
                 "matches": {
@@ -431,12 +420,11 @@ async def test_c30_pre_bubble_lista_dois_mais(monkeypatch, patch_deps) -> None:
     patch_deps["store"]["c1"] = SessionState(
         stage="abertura", greeted=True,
         veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
-        origem_apresentada=False,
     )
 
     async def real_dispatch(*, update_intent_sec, last_message, state):
         out: dict = {}
-        if state.veiculo_origem and not state.origem_apresentada:
+        if state.veiculo_origem and not state.vehicles_shown:
             ex = [
                 {"marca": "Chevrolet", "modelo": "Montana", "ano": 2019, "preco": 58900, "quilometragem": 95000, "cambio": "Manual"},
                 {"marca": "Chevrolet", "modelo": "Montana", "ano": 2017, "preco": 46900, "quilometragem": 120000, "cambio": "Manual"},
@@ -469,7 +457,7 @@ async def test_c13_regressao_stage_apresentacao(monkeypatch, patch_deps) -> None
         collected=Collected(
             nome="Raul",
             veiculo_interesse="Duster",
-            vehicle_focus_definido=True,
+            veiculo_interesse_confirmado=True,
             intencao="compra_direta",
             forma_pagamento="financiado",
             cidade="Joinville",
@@ -481,7 +469,7 @@ async def test_c13_regressao_stage_apresentacao(monkeypatch, patch_deps) -> None
         return StateUpdate(
             stage="apresentacao",
             collected=Collected(nome="Raul"),
-            missing=["vehicle_focus_definido"],
+            missing=["veiculo_interesse_confirmado"],
             next_action="apresentar opcoes",
             sentiment="neutro",
             intent="apresentar",

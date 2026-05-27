@@ -22,7 +22,7 @@ SCENARIOS: list[tuple[str, SessionState, list[dict], str, dict]] = [
     (
         "C26 — aceitam troca? -> infere intencao + possui_troca",
         SessionState(stage="descoberta", greeted=True,
-                     collected=Collected(nome="Raul", veiculo_interesse="Montana 2019", vehicle_focus_definido=True)),
+                     collected=Collected(nome="Raul", veiculo_interesse="Montana 2019", veiculo_interesse_confirmado=True)),
         [msg("outbound", "Show, qual a sua intenção com a Montana?")],
         "Vocês aceitam troca?",
         {"intencao": "troca", "possui_troca": True},
@@ -30,7 +30,7 @@ SCENARIOS: list[tuple[str, SessionState, list[dict], str, dict]] = [
     (
         "C27 — moro em Floripa no meio de outra conversa",
         SessionState(stage="descoberta", greeted=True,
-                     collected=Collected(nome="Raul", veiculo_interesse="Montana 2019", vehicle_focus_definido=True, intencao="compra_direta")),
+                     collected=Collected(nome="Raul", veiculo_interesse="Montana 2019", veiculo_interesse_confirmado=True, intencao="compra_direta")),
         [msg("outbound", "Beleza! O que te motiva a comprar agora?")],
         "Tô precisando de um carro mais confortável, moro em Floripa e ando muito",
         {"cidade": "Floripa"},
@@ -38,7 +38,7 @@ SCENARIOS: list[tuple[str, SessionState, list[dict], str, dict]] = [
     (
         "C28 — hipotético: 'se eu trocasse, vocês avaliam?' -> NÃO infere",
         SessionState(stage="descoberta", greeted=True,
-                     collected=Collected(nome="Raul", veiculo_interesse="Montana 2019", vehicle_focus_definido=True)),
+                     collected=Collected(nome="Raul", veiculo_interesse="Montana 2019", veiculo_interesse_confirmado=True)),
         [msg("outbound", "Show, qual a sua intenção com a Montana?")],
         "Se eu trocasse, vocês avaliam meu carro?",
         # esperado: intencao=null e possui_troca=null (não inequívoco)

@@ -25,7 +25,7 @@ async def scenario_c5_extrai_nome() -> None:
     update = StateUpdate(
         stage="descoberta",
         collected=Collected(nome="Raul"),
-        missing=["veiculo_interesse", "vehicle_focus_definido", "intencao"],
+        missing=["veiculo_interesse", "veiculo_interesse_confirmado", "intencao"],
         next_action="confirmar interesse no Duster e perguntar mais detalhes",
         sentiment="neutro",
         intent="qualificar",
@@ -48,7 +48,7 @@ async def scenario_c6_apresentacao() -> None:
     update = StateUpdate(
         stage="apresentacao",
         collected=state.collected,
-        missing=["vehicle_focus_definido", "intencao"],
+        missing=["veiculo_interesse_confirmado", "intencao"],
         next_action="apresentar matches e perguntar qual interessou",
         sentiment="neutro",
         intent="apresentar",

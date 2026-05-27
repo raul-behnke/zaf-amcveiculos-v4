@@ -110,14 +110,14 @@ def test_terminal_reason_propagated() -> None:
 
 
 def test_vehicle_focus_promovido() -> None:
-    state = SessionState(collected=Collected(vehicle_focus_definido=False))
+    state = SessionState(collected=Collected(veiculo_interesse_confirmado=False))
     upd = StateUpdate(
         stage="descoberta",
-        collected=Collected(vehicle_focus_definido=True),
+        collected=Collected(veiculo_interesse_confirmado=True),
         missing=[],
         next_action="x",
         sentiment="neutro",
         intent="qualificar",
     )
     new = merge_into_state(state, upd)
-    assert new.collected.vehicle_focus_definido is True
+    assert new.collected.veiculo_interesse_confirmado is True

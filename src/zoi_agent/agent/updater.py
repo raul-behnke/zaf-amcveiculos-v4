@@ -26,21 +26,34 @@ preenche o schema StateUpdate com base em:
   2) session_state atual,
   3) última mensagem do lead.
 
-# Apresentação ANTES do funil (PLAN §16 C4)
-- Se `state.veiculo_origem` existe E `state.origem_apresentada=false`, a próxima
-  ação do agente NÃO é qualificar nome nem nada do funil: é APRESENTAR matches
-  reais do estoque da origem (o orchestrator já dispara a tool).
-- Nesse turno, `next_action` deve ser algo como "apresentar matches da origem".
-- NÃO preencha nome neste turno mesmo que o lead se identifique; aguarde a próxima
-  rodada após a apresentação.
+# Veículo de interesse — modelo simplificado
+A regra mestra é UM único campo: `state.collected.veiculo_interesse`. Ele guarda
+o veículo que está em foco neste turno (vindo do CRM, da busca livre, ou da
+escolha do lead). `veiculo_interesse_confirmado=true` significa que o lead
+aceitou aquele veículo e podemos seguir qualificando o funil sem re-apresentar.
 
-# Após apresentação (origem_apresentada=true)
+# Apresentação ANTES do funil (PLAN §16 C4)
+- Se `state.vehicles_shown` está vazio (ninguém viu catálogo ainda), o orchestrator
+  apresenta veículos automaticamente (via origem do CRM ou busca livre).
+- Nesse turno inicial, `next_action` deve ser algo como "apresentar matches".
+- NÃO preencha nome neste turno mesmo que o lead se identifique; aguarde o
+  lead engajar num veículo primeiro.
+
+# Após apresentação (vehicles_shown não-vazio)
 - Lead engaja num veículo apresentado ("gostei do 2019", "quero esse Montana",
-  "o primeiro tá bom"): `vehicle_focus_definido=true` E mantém stage="descoberta".
-  Próximo missing é "nome" (PRIORITY).
-- Lead recusa todos ("não gostei", "não é isso", "tem outro?"): `vehicle_focus_definido=false`,
-  stage volta a "apresentacao", `intent="apresentar"`,
-  `intent_secundario="ver_outros_carros"` para nova busca livre. NÃO peça nome ainda.
+  "pode ser essa S10", "o primeiro tá bom"):
+  * `veiculo_interesse` = texto exato do veículo escolhido (ex: "Chevrolet S10 2008")
+  * `veiculo_interesse_confirmado=true`
+  * stage="descoberta", próximo missing é "nome" (PRIORITY).
+- Lead pediu nova filtragem ("tem alguma SUV?", "tem outro?", "me mostra mais"):
+  * `veiculo_interesse` = categoria/critério (ex: "SUV", "Honda")
+  * `veiculo_interesse_confirmado=false`
+  * stage="apresentacao", `intent="apresentar"`,
+    `intent_secundario="ver_outros_carros"`. NÃO peça nome ainda.
+- Lead muda foco para outro veículo durante o funil:
+  * Substitua `veiculo_interesse` pelo novo texto.
+  * Se foi escolha explícita de algo já em vehicles_shown -> confirmado=true.
+  * Se foi nova categoria -> confirmado=false, stage volta para apresentacao.
 
 # INFERÊNCIA CONTEXTUAL (alta confiança apenas)
 Extraia campos a partir de PERGUNTAS, MENÇÕES INCIDENTAIS e CONTEXTO,
@@ -66,12 +79,12 @@ REGRAS RÍGIDAS:
     NÃO "perguntar intenção".
 
 # DESEJOS ABSTRATOS NÃO MUDAM FOCO
-- Quando `vehicle_focus_definido=true` E o lead expressa um desejo ABSTRATO sobre
+- Quando `veiculo_interesse_confirmado=true` E o lead expressa um desejo ABSTRATO sobre
   veículos ("quero algo mais novo", "mais econômico", "com câmbio automático",
   "com mais espaço", "que gaste menos"), isso é MOTIVO ou CRITÉRIO de compra,
   NUNCA pedido de nova busca.
 - NÃO mude `intent` pra "apresentar". NÃO mude `intent_secundario` pra
-  "ver_outros_carros". NÃO regrida `vehicle_focus_definido` pra false.
+  "ver_outros_carros". NÃO regrida `veiculo_interesse_confirmado` pra false.
 - Use a frase como `motivo_compra_ou_troca` e continue qualificando o funil.
 - Só mude foco quando lead pedir EXPLICITAMENTE outro veículo
   ("quero ver outro", "tem outro?", "me mostra mais opções", "não quero esse").
@@ -81,7 +94,7 @@ Estes 10 campos devem ser preenchidos nesta ordem:
   {", ".join(PRIORITY_FIELDS)}
 
 Regras:
-- `vehicle_focus_definido=true` quando o lead convergiu num único veículo do estoque
+- `veiculo_interesse_confirmado=true` quando o lead convergiu num único veículo do estoque
   (ou um modelo bem específico do interesse de origem).
 - `possui_troca` boolean; se true, `troca_completa` exige modelo, ano, km e quitado.
 - Se um campo já está no state.collected, NÃO sobrescreva por valor menos específico.
@@ -91,7 +104,7 @@ Regras:
 - "abertura": pós-saudação, sem nome ainda.
 - "descoberta": qualificando.
 - "apresentacao": lead pediu ver outros carros OU vehicle_focus indefinido.
-- "fechamento": 10 campos OK OU (interesse_agendamento=true AND vehicle_focus_definido=true).
+- "fechamento": 10 campos OK OU (interesse_agendamento=true AND veiculo_interesse_confirmado=true).
 - "fechado": terminal action já executada (não muda mais).
 
 Regressão de stage é permitida (lead pode pedir ver outro carro em fechamento).
@@ -214,7 +227,7 @@ def merge_into_state(state: SessionState, update: StateUpdate) -> SessionState:
     for k, v in nxt.items():
         if cur.get(k) in (None, "", False) and v not in (None, "", False):
             cur[k] = v
-        elif k == "vehicle_focus_definido" and v is True:
+        elif k == "veiculo_interesse_confirmado" and v is True:
             cur[k] = True
     new.collected = type(new.collected)(**cur)
 

@@ -13,7 +13,7 @@ def _full_state(appointment=None) -> SessionState:
         collected=Collected(
             nome="Raul",
             veiculo_interesse="Renault Duster",
-            vehicle_focus_definido=True,
+            veiculo_interesse_confirmado=True,
             intencao="troca",
             possui_troca=True,
             troca_completa=TrocaInfo(modelo="Gol", ano=2001, km=280000, quitado=True),

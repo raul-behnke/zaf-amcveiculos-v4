@@ -28,7 +28,7 @@ class TrocaInfo(BaseModel):
 class Collected(BaseModel):
     nome: str | None = None
     veiculo_interesse: str | None = None
-    vehicle_focus_definido: bool = False
+    veiculo_interesse_confirmado: bool = False
     intencao: Literal["compra_direta", "troca"] | None = None
     possui_troca: bool | None = None
     troca_completa: TrocaInfo | None = None
@@ -89,7 +89,6 @@ class SessionState(BaseModel):
     stage: Stage = "abertura"
     greeted: bool = False
     veiculo_origem: VeiculoOrigem | None = None
-    origem_apresentada: bool = False
     collected: Collected = Field(default_factory=Collected)
     vehicles_shown: list[str] = Field(default_factory=list)
     last_card_external_id: str | None = None
@@ -107,7 +106,7 @@ class SessionState(BaseModel):
 PRIORITY_FIELDS: tuple[str, ...] = (
     "nome",
     "veiculo_interesse",
-    "vehicle_focus_definido",
+    "veiculo_interesse_confirmado",
     "intencao",
     "possui_troca",
     "troca_completa",
@@ -123,8 +122,8 @@ def compute_missing(c: Collected) -> list[str]:
     miss: list[str] = []
     d = c.model_dump()
     for f in PRIORITY_FIELDS:
-        if f == "vehicle_focus_definido":
-            if not c.vehicle_focus_definido:
+        if f == "veiculo_interesse_confirmado":
+            if not c.veiculo_interesse_confirmado:
                 miss.append(f)
             continue
         if f == "troca_completa":

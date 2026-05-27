@@ -101,7 +101,7 @@ async def test_origem_fallback_quando_sem_card_nem_keyword() -> None:
 async def test_focus_fallback() -> None:
     state = SessionState(
         collected=Collected(
-            vehicle_focus_definido=True, veiculo_interesse="EcoSport"
+            veiculo_interesse_confirmado=True, veiculo_interesse="EcoSport"
         ),
     )
     v = await photos_mod.pick_target_vehicle(last_message="manda foto", state=state)

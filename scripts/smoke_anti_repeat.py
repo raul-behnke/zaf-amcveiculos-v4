@@ -34,7 +34,6 @@ SCENARIOS: list[tuple[str, SessionState, StateUpdate, str, dict]] = [
         SessionState(
             stage="abertura", greeted=True,
             veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
-            origem_apresentada=False,
         ),
         StateUpdate(
             stage="abertura",
@@ -63,13 +62,12 @@ SCENARIOS: list[tuple[str, SessionState, StateUpdate, str, dict]] = [
         SessionState(
             stage="descoberta", greeted=True,
             veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
-            origem_apresentada=True,
             vehicles_shown=["m-1", "m-2"],
-            collected=Collected(vehicle_focus_definido=True, veiculo_interesse="Montana 2019"),
+            collected=Collected(veiculo_interesse_confirmado=True, veiculo_interesse="Montana 2019"),
         ),
         StateUpdate(
             stage="descoberta",
-            collected=Collected(vehicle_focus_definido=True, veiculo_interesse="Montana 2019"),
+            collected=Collected(veiculo_interesse_confirmado=True, veiculo_interesse="Montana 2019"),
             missing=["nome", "intencao"],
             next_action="perguntar nome",
             sentiment="positivo",
@@ -82,12 +80,11 @@ SCENARIOS: list[tuple[str, SessionState, StateUpdate, str, dict]] = [
         "turno 3: lead diz nome",
         SessionState(
             stage="descoberta", greeted=True,
-            collected=Collected(nome="Raul", vehicle_focus_definido=True, veiculo_interesse="Montana 2019"),
-            origem_apresentada=True,
+            collected=Collected(nome="Raul", veiculo_interesse_confirmado=True, veiculo_interesse="Montana 2019"),
         ),
         StateUpdate(
             stage="descoberta",
-            collected=Collected(nome="Raul", vehicle_focus_definido=True, veiculo_interesse="Montana 2019"),
+            collected=Collected(nome="Raul", veiculo_interesse_confirmado=True, veiculo_interesse="Montana 2019"),
             missing=["intencao"],
             next_action="perguntar intenção",
             sentiment="positivo",
@@ -100,12 +97,11 @@ SCENARIOS: list[tuple[str, SessionState, StateUpdate, str, dict]] = [
         "turno 4: lead diz troca",
         SessionState(
             stage="descoberta", greeted=True,
-            collected=Collected(nome="Raul", vehicle_focus_definido=True, veiculo_interesse="Montana 2019", intencao="troca"),
-            origem_apresentada=True,
+            collected=Collected(nome="Raul", veiculo_interesse_confirmado=True, veiculo_interesse="Montana 2019", intencao="troca"),
         ),
         StateUpdate(
             stage="descoberta",
-            collected=Collected(nome="Raul", vehicle_focus_definido=True, veiculo_interesse="Montana 2019", intencao="troca", possui_troca=True),
+            collected=Collected(nome="Raul", veiculo_interesse_confirmado=True, veiculo_interesse="Montana 2019", intencao="troca", possui_troca=True),
             missing=["troca_completa"],
             next_action="puxar detalhes da troca",
             sentiment="neutro",
@@ -118,12 +114,11 @@ SCENARIOS: list[tuple[str, SessionState, StateUpdate, str, dict]] = [
         "turno 5: lead complementa troca",
         SessionState(
             stage="descoberta", greeted=True,
-            collected=Collected(nome="Raul", vehicle_focus_definido=True, veiculo_interesse="Montana 2019", intencao="troca", possui_troca=True),
-            origem_apresentada=True,
+            collected=Collected(nome="Raul", veiculo_interesse_confirmado=True, veiculo_interesse="Montana 2019", intencao="troca", possui_troca=True),
         ),
         StateUpdate(
             stage="descoberta",
-            collected=Collected(nome="Raul", vehicle_focus_definido=True, veiculo_interesse="Montana 2019", intencao="troca", possui_troca=True),
+            collected=Collected(nome="Raul", veiculo_interesse_confirmado=True, veiculo_interesse="Montana 2019", intencao="troca", possui_troca=True),
             missing=["motivo_compra_ou_troca"],
             next_action="puxar motivo",
             sentiment="neutro",

@@ -59,7 +59,7 @@ async def test_pick_por_vehicles_shown(fake_inv) -> None:
 @pytest.mark.asyncio
 async def test_pick_por_focus(fake_inv) -> None:
     state = SessionState(
-        collected=Collected(veiculo_interesse="Duster", vehicle_focus_definido=True)
+        collected=Collected(veiculo_interesse="Duster", veiculo_interesse_confirmado=True)
     )
     v = await photos_mod.pick_target_vehicle(
         last_message="me manda foto", state=state

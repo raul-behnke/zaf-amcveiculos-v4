@@ -67,7 +67,7 @@ async def pick_target_vehicle(
             return v
 
     # 3) veiculo_interesse texto livre (foco definido)
-    if state.collected.vehicle_focus_definido and state.collected.veiculo_interesse:
+    if state.collected.veiculo_interesse_confirmado and state.collected.veiculo_interesse:
         v = _find_by_keyword(state.collected.veiculo_interesse, inventory)
         if v:
             log.info("photo_target_focus", external_id=v.get("external_id"))

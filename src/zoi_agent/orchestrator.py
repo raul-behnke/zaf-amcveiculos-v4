@@ -111,13 +111,11 @@ async def _dispatch_tools(
 ) -> dict[str, Any]:
     out: dict[str, Any] = {}
 
-    # PRIORITÁRIO: origem ainda não apresentada -> traz matches do estoque
-    # ANTES de qualificar (PLAN §5 buscar_veiculo_interesse_origem + §16 C4)
-    if (
-        state.veiculo_origem
-        and not state.origem_apresentada
-        and state.stage in ("abertura", "descoberta")
-    ):
+    # PRIORITÁRIO: ainda não mostramos nenhum veículo + temos origem do CRM
+    # -> traz matches do estoque ANTES de qualificar (PLAN §5 + §16 C4).
+    # Gate simplificado: usa vehicles_shown vazio como derivação de "lead
+    # nunca viu catálogo nosso". Sem flag separado de origem_apresentada.
+    if state.veiculo_origem and not state.vehicles_shown:
         try:
             origem = await buscar_veiculo_interesse_origem(state)
             if origem:
@@ -162,9 +160,9 @@ async def _dispatch_tools(
         out["rendered_vehicle_ids"] = rendered_ids
         out["vehicles_presented_count"] = len(rendered_ids)
     # Gate duplo de agendamento (PLAN §11):
-    # interesse_agendamento=true AND vehicle_focus_definido=true
+    # interesse_agendamento=true AND veiculo_interesse_confirmado=true
     quer_agendar = bool(state.collected.interesse_agendamento)
-    focus_ok = bool(state.collected.vehicle_focus_definido)
+    focus_ok = bool(state.collected.veiculo_interesse_confirmado)
     if quer_agendar and focus_ok:
         pref = None
         # preferencia vem do update; mas só vemos isso no dispatcher novo (não temos
@@ -177,7 +175,7 @@ async def _dispatch_tools(
             out["slots"] = []
     elif quer_agendar and not focus_ok:
         # C19: lead quer agendar mas sem foco -> agente puxa foco antes
-        out["agendamento_gate"] = {"motivo": "vehicle_focus_definido=false"}
+        out["agendamento_gate"] = {"motivo": "veiculo_interesse_confirmado=false"}
 
     if update_intent_sec == "pedido_foto":
         try:
@@ -419,11 +417,8 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
         # Turno sem render de veículo: limpa o card-único anterior.
         new_state.last_card_external_id = None
 
-    # Origem apresentada: marca gate sempre que QUALQUER veículo foi renderizado.
-    # Semântica: "lead já viu catálogo nosso, não precisa apresentar origem
-    # proativamente de novo". Independe do disparo (origem_matches ou search_results).
-    if rendered_ids or tools.get("origem_matches"):
-        new_state.origem_apresentada = True
+    # NOTA: removido flag origem_apresentada. Semântica derivada de
+    # state.vehicles_shown não-vazio (a inserção acima já cuida disso).
 
     # Send phase sob shield: não pode ser cancelado por nova preempção no meio.
     await asyncio.shield(

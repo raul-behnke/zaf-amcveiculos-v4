@@ -45,7 +45,6 @@ async def test_origem_search_quando_nao_apresentada(monkeypatch) -> None:
     monkeypatch.setattr(om, "search_inventory", fake_search)
     state = SessionState(
         veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
-        origem_apresentada=False,
     )
     payload = await om.buscar_veiculo_interesse_origem(state)
     assert payload is not None
@@ -55,6 +54,8 @@ async def test_origem_search_quando_nao_apresentada(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_origem_skip_quando_apresentada(monkeypatch) -> None:
+    """vehicles_shown não-vazio sinaliza que lead já viu catálogo nosso —
+    não re-apresentar origem proativamente."""
     called = {"n": 0}
 
     async def fake_search(query: str):
@@ -64,7 +65,7 @@ async def test_origem_skip_quando_apresentada(monkeypatch) -> None:
     monkeypatch.setattr(om, "search_inventory", fake_search)
     state = SessionState(
         veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
-        origem_apresentada=True,
+        vehicles_shown=["alguma-coisa-vista-antes"],
     )
     payload = await om.buscar_veiculo_interesse_origem(state)
     assert payload is None
@@ -73,7 +74,7 @@ async def test_origem_skip_quando_apresentada(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_origem_skip_sem_origem() -> None:
-    state = SessionState(veiculo_origem=None, origem_apresentada=False)
+    state = SessionState(veiculo_origem=None)
     assert await om.buscar_veiculo_interesse_origem(state) is None
 
 

@@ -95,7 +95,7 @@ def build_consolidated_note(
         f"Cidade: {_or_dash(c.cidade)}",
         "",
         f"Veículo de interesse: {_or_dash(c.veiculo_interesse)}",
-        f"Foco definido: {'sim' if c.vehicle_focus_definido else '-'}",
+        f"Foco definido: {'sim' if c.veiculo_interesse_confirmado else '-'}",
         f"Intenção: {_or_dash(c.intencao)}",
         f"Possui troca: {_yes_no(c.possui_troca)}",
         f"Troca: {_format_troca(state)}",
