@@ -31,7 +31,7 @@ from zoi_agent.metrics import TURNS_TOTAL
 from zoi_agent.tools.calendar import book_appointment, propose_slots
 from zoi_agent.tools.faq import get_faq_raw
 from zoi_agent.tools.handoff import encaminhar_para_vendedor
-from zoi_agent.tools.inventory import search_inventory
+from zoi_agent.tools.inventory import get_vehicle_details, search_inventory
 from zoi_agent.tools.origem import buscar_veiculo_interesse_origem
 from zoi_agent.tools.photos import build_photo_payload
 from zoi_agent.tools.terminal import TERMINAL_REASONS
@@ -254,6 +254,30 @@ async def _dispatch_tools(
                 "available": False, "vehicle": None, "images": [],
                 "single_image_only": False, "will_send_count": 0,
             }
+
+    # Ficha completa do veículo em foco — evita alucinação em perguntas
+    # "esse tem X?". Prioridade pra determinar o foco:
+    #   1. Veículo da foto recém-enviada (lead engajou nele AGORA).
+    #   2. last_card_external_id (card único renderizado).
+    #   3. Último de vehicles_shown (último que o lead viu).
+    # NUNCA cai pro veiculo_origem.texto — pode ser modelo fora do estoque.
+    focus_eid: str | None = None
+    photos_vehicle = (out.get("photos") or {}).get("vehicle") or {}
+    if photos_vehicle.get("external_id"):
+        focus_eid = str(photos_vehicle["external_id"])
+    elif state.last_card_external_id:
+        focus_eid = state.last_card_external_id
+    elif state.vehicles_shown:
+        focus_eid = state.vehicles_shown[-1]
+
+    if focus_eid:
+        try:
+            details = await get_vehicle_details(focus_eid)
+            if details:
+                out["vehicle_in_focus"] = details
+        except Exception as e:
+            log.error("vehicle_details_failed", err=str(e))
+
     return out
 
 
@@ -484,10 +508,13 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
     photos_payload = tools.get("photos") or {}
     if photos_payload.get("images"):
         photo_urls = list(photos_payload["images"])
-        # Marca vehicle como mostrado
         vid = (photos_payload.get("vehicle") or {}).get("external_id")
-        if vid and vid not in new_state.vehicles_shown:
-            new_state.vehicles_shown.append(vid)
+        if vid:
+            if vid not in new_state.vehicles_shown:
+                new_state.vehicles_shown.append(vid)
+            # Foco corrente: lead engajou nesse veículo pedindo foto.
+            # Próximas perguntas "esse tem X?" referem-se a ele.
+            new_state.last_card_external_id = str(vid)
 
     # vehicles_shown só recebe IDs efetivamente RENDERIZADOS em bolhas (não
     # candidatos da busca). last_card_external_id setado só quando 1 card único.
@@ -496,10 +523,12 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
         for eid in rendered_ids:
             if eid not in new_state.vehicles_shown:
                 new_state.vehicles_shown.append(eid)
-        new_state.last_card_external_id = rendered_ids[0] if len(rendered_ids) == 1 else None
-    else:
-        # Turno sem render de veículo: limpa o card-único anterior.
-        new_state.last_card_external_id = None
+        # 1 card único -> foco; lista -> mantém foco anterior (não há
+        # convergência ainda; o lead vai escolher um).
+        if len(rendered_ids) == 1:
+            new_state.last_card_external_id = rendered_ids[0]
+    # NÃO limpa last_card_external_id quando turno é vazio de cards: foco
+    # implícito de pedido_foto / engajamento anterior é preservado.
 
     # NOTA: removido flag origem_apresentada. Semântica derivada de
     # state.vehicles_shown não-vazio (a inserção acima já cuida disso).
