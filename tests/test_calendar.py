@@ -62,7 +62,7 @@ async def test_propose_slots_interleave(mock_client, monkeypatch) -> None:
     monkeypatch.setattr(cal, "datetime", FakeDT)
     mock_client.get.return_value = _fake_freeslots(fixed)
 
-    slots = await cal.propose_slots(limit=3)
+    slots, _fb = await cal.propose_slots(limit=3)
     assert len(slots) == 3
     # Espera 1 do d1, 1 do d2, 1 do d1 (interleave)
     dias = {s.dt.date() for s in slots}
@@ -81,7 +81,7 @@ async def test_propose_filtra_periodo_manha(mock_client, monkeypatch) -> None:
     monkeypatch.setattr(cal, "datetime", FakeDT)
     mock_client.get.return_value = _fake_freeslots(fixed)
 
-    slots = await cal.propose_slots(periodo="manha", limit=5)
+    slots, _fb = await cal.propose_slots(periodo="manha", limit=5)
     assert all(s.dt.hour < 12 for s in slots)
     assert len(slots) >= 1
 
@@ -98,7 +98,7 @@ async def test_propose_filtra_periodo_noite(mock_client, monkeypatch) -> None:
     monkeypatch.setattr(cal, "datetime", FakeDT)
     mock_client.get.return_value = _fake_freeslots(fixed)
 
-    slots = await cal.propose_slots(periodo="noite", limit=5)
+    slots, _fb = await cal.propose_slots(periodo="noite", limit=5)
     assert all(s.dt.hour >= 18 for s in slots)
 
 
@@ -114,7 +114,7 @@ async def test_propose_filtra_dia_amanha(mock_client, monkeypatch) -> None:
     monkeypatch.setattr(cal, "datetime", FakeDT)
     mock_client.get.return_value = _fake_freeslots(fixed)
 
-    slots = await cal.propose_slots(dia="amanhã", limit=5)
+    slots, _fb = await cal.propose_slots(dia="amanhã", limit=5)
     target = (fixed.date()).replace().toordinal() + 1
     assert all(s.dt.date().toordinal() == target for s in slots)
 
@@ -131,7 +131,7 @@ async def test_propose_pula_slots_passados(mock_client, monkeypatch) -> None:
     monkeypatch.setattr(cal, "datetime", FakeDT)
     mock_client.get.return_value = _fake_freeslots(fixed)
 
-    slots = await cal.propose_slots(limit=10)
+    slots, _fb = await cal.propose_slots(limit=10)
     for s in slots:
         assert s.dt > fixed
 

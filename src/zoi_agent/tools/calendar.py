@@ -135,8 +135,16 @@ async def propose_slots(
     dia: str | None = None,
     periodo: Period | None = None,
     limit: int = 3,
-    janela_dias: int = 3,
-) -> list[Slot]:
+    janela_dias: int = 7,
+) -> tuple[list[Slot], bool]:
+    """Retorna (slots, fallback). `fallback=True` quando a preferência
+    do lead (dia/periodo) não tinha disponibilidade e tivemos que ignorar
+    o filtro — responder usa isso pra explicar ao lead que não tem o dia
+    pedido mas tem opções na semana.
+
+    Janela de 7 dias (default) cobre semana toda incluindo sábado/domingo,
+    desde que o calendário do GHL tenha disponibilidade configurada lá.
+    """
     tz = ZoneInfo(settings.app_timezone)
     now = datetime.now(tz)
     end = now + timedelta(days=janela_dias)
@@ -150,12 +158,20 @@ async def propose_slots(
         operation="calendar.free_slots",
     )
     slots = _filter_and_pick(raw, dia=dia, periodo=periodo, limit=limit, now=now)
+    fallback = False
+    # Se filtro por preferência veio vazio, tenta sem filtro pra não deixar
+    # o lead sem opção alguma.
+    if not slots and (dia or periodo):
+        log.info("calendar_slots_fallback_no_pref_match", dia=dia, periodo=periodo)
+        slots = _filter_and_pick(raw, dia=None, periodo=None, limit=limit, now=now)
+        fallback = True
     log.info(
         "calendar_slots_proposed",
         dia=dia, periodo=periodo, returned=len(slots),
+        fallback=fallback,
         slots=[s.iso for s in slots],
     )
-    return slots
+    return slots, fallback
 
 
 # --- book_appointment -----------------------------------------------------
