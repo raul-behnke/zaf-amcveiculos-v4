@@ -117,12 +117,24 @@ def cancel_existing(contact_id: str) -> None:
 
 async def _dispatch_tools(
     *,
-    update_intent: str | None,
     update_intent_sec: str | None,
     last_message: str,
     state,
+    update_intent: str | None = None,
+    update_topics: list[str] | None = None,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {}
+
+    # Union de tópicos: novo campo `topics` + legacy `intent_secundario` +
+    # promotion de intent=agendamento. Garante multi-intenção: lead pode
+    # tocar em vários assuntos no mesmo turno e o orchestrator dispara TODAS
+    # as ferramentas necessárias (FAQ + slots, FAQ + search, foto + FAQ, etc.)
+    topics: set[str] = set(update_topics or [])
+    if update_intent_sec:
+        topics.add(update_intent_sec)
+    if update_intent == "agendamento":
+        topics.add("agendamento")
+    out["topics_dispatched"] = sorted(topics)
 
     # PRIORITÁRIO: ainda não apresentamos a origem do CRM
     # -> traz matches do estoque ANTES de qualificar (PLAN §5 + §16 C4).
@@ -145,7 +157,7 @@ async def _dispatch_tools(
         except Exception as e:
             log.error("origem_dispatch_failed", err=str(e))
 
-    if update_intent_sec == "duvida_operacional":
+    if "duvida_operacional" in topics:
         try:
             out["faq_yaml"] = await get_faq_raw()
         except Exception as e:
@@ -153,24 +165,18 @@ async def _dispatch_tools(
             out["faq_yaml"] = ""
 
     # search_inventory dispara em 2 cenários:
-    #   a) intent_sec=ver_outros_carros (lead pediu alternativas)
+    #   a) topic=ver_outros_carros (lead pediu alternativas)
     #   b) origem retornou 0/0 nesta rodada (fallback automático pra não
     #      deixar o lead sem opções; PLAN §5 promete VALOR na 1ª resposta)
-    want_search = update_intent_sec == "ver_outros_carros" or origem_empty
+    want_search = "ver_outros_carros" in topics or origem_empty
     if want_search:
         try:
-            # Âncora: foco atual do lead (collected) tem prioridade, depois a
-            # origem do CRM. Se origem deu 0/0 NESTA rodada, drop âncora —
-            # modelo provadamente fora do estoque.
             anchor = state.collected.veiculo_interesse or (
                 state.veiculo_origem.texto if state.veiculo_origem else ""
             )
             if origem_empty:
                 anchor = ""
-            # ver_outros_carros: lead quer ALTERNATIVA. Mantém marca/modelo
-            # da âncora mas descarta ano específico — se ele pediu Onix
-            # 2023/2024 e quer "outro", o Onix 2015 também é resposta válida.
-            if update_intent_sec == "ver_outros_carros":
+            if "ver_outros_carros" in topics:
                 anchor = _strip_year_tokens(anchor)
             query = f"{anchor} {last_message}".strip() if anchor else last_message
             if len(query.strip()) < 3:
@@ -209,14 +215,15 @@ async def _dispatch_tools(
         out["pre_bubbles"] = pre_bubbles
         out["rendered_vehicle_ids"] = rendered_ids
         out["vehicles_presented_count"] = len(rendered_ids)
-    # Gate de agendamento (PLAN §11) — flexibilizado:
-    # quer_agendar: collected ou intent=agendamento (afirmativas indiretas
-    #   tipo "quais horários?" às vezes não setam collected mas o updater
-    #   marca o intent).
-    # focus_ok: confirmado=true OU temos foco implícito (último card único
-    #   exibido OU exatamente 1 veículo apresentado na sessão). Evita travar
-    #   no gate quando o CRM trouxe o veículo de origem e o lead engajou.
-    quer_agendar = bool(state.collected.interesse_agendamento) or update_intent == "agendamento"
+    # Gate de agendamento (PLAN §11) — flexibilizado + multi-topic:
+    # quer_agendar: collected ou intent=agendamento ou tópico=agendamento.
+    # focus_ok: confirmado=true OU foco implícito (último card único OU
+    #   exatamente 1 veículo na sessão).
+    quer_agendar = (
+        bool(state.collected.interesse_agendamento)
+        or update_intent == "agendamento"
+        or "agendamento" in topics
+    )
     has_single_focus = (
         bool(state.last_card_external_id)
         or len(state.vehicles_shown or []) == 1
@@ -236,7 +243,7 @@ async def _dispatch_tools(
         # C19: lead quer agendar mas sem foco -> agente puxa foco antes
         out["agendamento_gate"] = {"motivo": "veiculo_interesse_confirmado=false"}
 
-    if update_intent_sec == "pedido_foto":
+    if "pedido_foto" in topics:
         try:
             out["photos"] = await build_photo_payload(
                 last_message=last_message, state=state
@@ -392,6 +399,7 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
     tools = await _dispatch_tools(
         update_intent=update.intent,
         update_intent_sec=update.intent_secundario,
+        update_topics=list(update.topics or []),
         last_message=last_message,
         state=new_state,
     )

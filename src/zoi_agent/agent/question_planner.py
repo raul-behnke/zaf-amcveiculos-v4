@@ -120,7 +120,10 @@ def plan_next_question(
 
     # 3. Apresentação em andamento (pre_bubbles foram preparados) ->
     #    pergunta de FOCO, não funil.
-    if update.intent_secundario == "ver_outros_carros" or update.intent == "apresentar":
+    topics = set(update.topics or [])
+    if update.intent_secundario:
+        topics.add(update.intent_secundario)
+    if "ver_outros_carros" in topics or update.intent == "apresentar":
         # Sem campo do funil — responder decide entre singular/plural via
         # tools.vehicles_presented_count.
         return NextQuestion(
@@ -153,6 +156,7 @@ def plan_next_question(
     quer_agendar = (
         state.collected.interesse_agendamento is True
         or update.intent == "agendamento"
+        or "agendamento" in topics
     )
     has_single_focus = (
         bool(state.last_card_external_id)

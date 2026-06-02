@@ -62,7 +62,7 @@ def patch_deps(monkeypatch):
     monkeypatch.setattr(orch.settings, "responder_sleep_max", 0.0)
 
     # tools
-    async def fake_dispatch(*, update_intent_sec, last_message, state):
+    async def fake_dispatch(*, update_intent_sec, last_message, state, **_kwargs):
         return {}
 
     monkeypatch.setattr(orch, "_dispatch_tools", fake_dispatch)
@@ -240,7 +240,7 @@ async def test_c4_dispatch_origem_quando_nao_apresentada(monkeypatch, patch_deps
 
     # O fixture autouse mockou _dispatch_tools para {}. Restauramos a versão real
     # neste teste pra validar o dispatch da origem.
-    async def real_dispatch_with_origem(*, update_intent_sec, last_message, state):
+    async def real_dispatch_with_origem(*, update_intent_sec, last_message, state, **_kwargs):
         out: dict = {}
         if state.veiculo_origem and not state.vehicles_shown:
             payload = await orch.buscar_veiculo_interesse_origem(state)
@@ -374,7 +374,7 @@ async def test_c29_pre_bubble_card_um_veiculo(monkeypatch, patch_deps) -> None:
         veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
     )
 
-    async def real_dispatch(*, update_intent_sec, last_message, state):
+    async def real_dispatch(*, update_intent_sec, last_message, state, **_kwargs):
         out: dict = {}
         if state.veiculo_origem and not state.vehicles_shown:
             out["origem_matches"] = {
@@ -422,7 +422,7 @@ async def test_c30_pre_bubble_lista_dois_mais(monkeypatch, patch_deps) -> None:
         veiculo_origem=VeiculoOrigem(texto="Chevrolet Montana"),
     )
 
-    async def real_dispatch(*, update_intent_sec, last_message, state):
+    async def real_dispatch(*, update_intent_sec, last_message, state, **_kwargs):
         out: dict = {}
         if state.veiculo_origem and not state.vehicles_shown:
             ex = [

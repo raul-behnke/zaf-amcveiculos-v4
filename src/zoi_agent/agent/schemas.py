@@ -17,6 +17,17 @@ Intent = Literal[
 ]
 IntentSecundario = Literal["duvida_operacional", "ver_outros_carros", "pedido_foto"] | None
 
+# Tópicos múltiplos por turno — substituição estrutural ao intent_secundario.
+# Lead pode tocar em vários assuntos numa mensagem só ("Quais horários? Qual
+# endereço?" -> ["agendamento","duvida_operacional"]) e o orchestrator dispara
+# uma ferramenta por tópico no mesmo turno.
+Topic = Literal[
+    "duvida_operacional",
+    "agendamento",
+    "ver_outros_carros",
+    "pedido_foto",
+]
+
 
 class TrocaInfo(BaseModel):
     modelo: str | None = None
@@ -57,6 +68,15 @@ class StateUpdate(BaseModel):
     sentiment: Sentiment
     intent: Intent
     intent_secundario: IntentSecundario = None
+    topics: list[Topic] = Field(
+        default_factory=list,
+        description=(
+            "Lista de TODOS os tópicos identificados na mensagem do lead nesta "
+            "rodada — pode conter múltiplos. Ex: 'Quais horários posso passar? "
+            "Qual o endereço?' -> ['agendamento','duvida_operacional']. NUNCA "
+            "deixe vazio se houver qualquer dos tópicos canônicos."
+        ),
+    )
     should_handoff: bool = False
     handoff_reason: str | None = None
     pode_handoff: bool = False

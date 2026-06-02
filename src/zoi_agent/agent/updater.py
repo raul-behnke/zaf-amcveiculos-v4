@@ -125,10 +125,32 @@ Regressão de stage é permitida (lead pode pedir ver outro carro em fechamento)
   ir hoje?", "amanhã de manhã serve?". Tudo isso é CONFIRMAÇÃO de querer agendar.
 - "apresentar": quer ver opções de veículos.
 
-# intent_secundario (não exclusivo)
+# intent_secundario (mantido pra compat; PRIMÁRIO é `topics`)
 - "duvida_operacional": pergunta sobre processo (paga, financia, troca, doc) → responder vai chamar get_faq.
 - "ver_outros_carros": quer alternativas → search_inventory.
 - "pedido_foto": pediu imagem.
+
+# topics (CRÍTICO — multi-intenção por turno)
+Liste em `topics` TODOS os tópicos identificados na MENSAGEM ATUAL do lead.
+Diferente de `intent_secundario` (1 valor só), `topics` é lista — preencha
+com tudo que aparecer. O orchestrator dispara uma ferramenta por tópico:
+
+- "duvida_operacional": qualquer pergunta sobre processo/preço/financiamento/
+  pagamento/troca/documentação/endereço/horário de funcionamento/localização.
+- "agendamento": quer marcar visita OU pergunta indireta sobre quando passar
+  ("quais horários?", "tem horário amanhã?", "posso ir hoje?").
+- "ver_outros_carros": quer ver alternativas/outros modelos.
+- "pedido_foto": quer imagem.
+
+Exemplos:
+- "Quais horários posso passar? Qual o endereço?"  -> ["agendamento","duvida_operacional"]
+- "Tem fotos? Aceita financiamento?"                -> ["pedido_foto","duvida_operacional"]
+- "Tem outro Onix? Vocês têm consórcio?"            -> ["ver_outros_carros","duvida_operacional"]
+- "Quero ver mais detalhes desse, preço?"           -> ["duvida_operacional"]
+- "Sim, quero agendar"                              -> ["agendamento"]
+- "Compra direta, sem troca"                        -> []  (resposta de funil, sem tópico secundário)
+
+NÃO liste o mesmo tópico 2x. Liste vazio `[]` se o turno é só resposta de funil.
 
 # Handoff
 - `should_handoff=true` quando:
