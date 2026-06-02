@@ -91,6 +91,7 @@ class SessionState(BaseModel):
     veiculo_origem: VeiculoOrigem | None = None
     collected: Collected = Field(default_factory=Collected)
     vehicles_shown: list[str] = Field(default_factory=list)
+    origem_apresentada: bool = False
     last_asked_fields: list[str] = Field(default_factory=list)
     last_card_external_id: str | None = None
     humano_solicitado_count: int = 0

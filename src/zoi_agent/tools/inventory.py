@@ -251,12 +251,18 @@ Você seleciona veículos PARECIDOS quando não há resultados exatos para a bus
 
 REGRAS:
 - Receba o pedido original do cliente e uma lista de veículos do estoque (JSON resumido).
-- Selecione até `limit` veículos que mais se aproximam, dando preferência a:
-  1) mesmo segmento/carroceria,
+- SEMPRE retorne até `limit` veículos se houver inventário disponível — o lead
+  precisa ver opções, não receber resposta vazia. Mesmo sem casamento perfeito,
+  ranqueie os mais próximos por:
+  1) mesmo segmento/carroceria (sedan↔sedan, SUV↔SUV, etc.),
   2) faixa de preço próxima,
-  3) ano e km semelhantes.
-- Para cada um, escreva um `motivo` curto e em português brasileiro (1 frase), explicando por que vale considerar mesmo sem casar 100%.
-- Retorne external_id exatamente como veio no input. Se nada for razoável, retorne lista vazia.
+  3) ano e km semelhantes,
+  4) mesma marca (último critério).
+- Para cada um, escreva um `motivo` curto e honesto em pt-BR (1 frase),
+  posicionando como ALTERNATIVA real ao que o lead pediu (ex.: "não temos Sentra,
+  mas este Logan é sedan econômico na mesma faixa").
+- Só retorne lista vazia se a lista de candidatos vier vazia.
+- Retorne external_id exatamente como veio no input.
 """
 
 

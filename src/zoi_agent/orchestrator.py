@@ -112,15 +112,24 @@ async def _dispatch_tools(
 ) -> dict[str, Any]:
     out: dict[str, Any] = {}
 
-    # PRIORITÁRIO: ainda não mostramos nenhum veículo + temos origem do CRM
+    # PRIORITÁRIO: ainda não apresentamos a origem do CRM
     # -> traz matches do estoque ANTES de qualificar (PLAN §5 + §16 C4).
-    # Gate simplificado: usa vehicles_shown vazio como derivação de "lead
-    # nunca viu catálogo nosso". Sem flag separado de origem_apresentada.
-    if state.veiculo_origem and not state.vehicles_shown:
+    # Gate usa flag origem_apresentada (set abaixo independente de ter rendido).
+    # Evita refazer a mesma busca toda rodada quando origem deu 0/0.
+    origem_empty = False
+    if state.veiculo_origem and not state.origem_apresentada:
         try:
             origem = await buscar_veiculo_interesse_origem(state)
+            # Mesmo com 0/0, marca apresentada -> não refaz a mesma busca nas
+            # próximas rodadas (bug histórico: loop infinito de "Sentra=0").
+            state.origem_apresentada = True
             if origem:
                 out["origem_matches"] = origem
+                m = (origem or {}).get("matches") or {}
+                if not (m.get("exatos") or m.get("parecidos")):
+                    origem_empty = True
+            else:
+                origem_empty = True
         except Exception as e:
             log.error("origem_dispatch_failed", err=str(e))
 
@@ -130,13 +139,23 @@ async def _dispatch_tools(
         except Exception as e:
             log.error("faq_fetch_failed", err=str(e))
             out["faq_yaml"] = ""
-    if update_intent_sec == "ver_outros_carros":
+
+    # search_inventory dispara em 2 cenários:
+    #   a) intent_sec=ver_outros_carros (lead pediu alternativas)
+    #   b) origem retornou 0/0 nesta rodada (fallback automático pra não
+    #      deixar o lead sem opções; PLAN §5 promete VALOR na 1ª resposta)
+    want_search = update_intent_sec == "ver_outros_carros" or origem_empty
+    if want_search:
         try:
-            # Query âncora: combina o foco atual (state.collected.veiculo_interesse)
-            # com a fala do lead. Resolve "Oque mais?" (vago) -> mantém categoria.
-            # Se ambos existirem, mini-LLM vê os dois e prioriza coerência.
             anchor = state.collected.veiculo_interesse or ""
+            # Se origem alvo já provou estar fora de estoque, não amarra a
+            # busca ao modelo dela — alarga pra marca ou categoria do lead.
+            if origem_empty or state.origem_apresentada:
+                anchor = ""
             query = f"{anchor} {last_message}".strip() if anchor else last_message
+            # Fallback final: query vazia/curta -> traz catálogo amplo.
+            if len(query.strip()) < 3:
+                query = "veículos disponíveis"
             res = await search_inventory(
                 query,
                 exclude_ids=list(state.vehicles_shown or []),
@@ -150,10 +169,13 @@ async def _dispatch_tools(
     # do responder. Reduz token, mantém visual consistente.
     pre_bubbles: list[str] = []
     rendered_ids: list[str] = []
-    if out.get("origem_matches"):
-        m = (out["origem_matches"] or {}).get("matches") or {}
-        exatos = m.get("exatos") or []
-        parecidos = [p.get("vehicle") for p in (m.get("parecidos") or []) if p.get("vehicle")]
+    # Origem só renderiza se DE FATO trouxe veículos. Se veio vazia, o bloco
+    # de search_results (fallback acima) é quem assume o pre-render.
+    om = (out.get("origem_matches") or {}).get("matches") or {}
+    origem_has_content = bool(om.get("exatos") or om.get("parecidos"))
+    if origem_has_content:
+        exatos = om.get("exatos") or []
+        parecidos = [p.get("vehicle") for p in (om.get("parecidos") or []) if p.get("vehicle")]
         bs, ids = build_vehicle_blocks_with_ids(exatos=exatos, parecidos=parecidos)
         pre_bubbles.extend(bs)
         rendered_ids.extend(ids)
