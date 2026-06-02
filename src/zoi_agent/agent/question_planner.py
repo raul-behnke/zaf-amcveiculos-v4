@@ -112,13 +112,11 @@ def plan_next_question(
             canonical_text="", skip_funnel_reason="terminal",
         )
 
-    # 2. Dúvida operacional -> primeiro responde a dúvida, missing fica suspenso 1 turno
-    if update.intent_secundario == "duvida_operacional":
-        return NextQuestion(
-            field=None, intent="duvida",
-            canonical_text="",
-            skip_funnel_reason="responder dúvida do lead antes de avançar",
-        )
+    # 2. Dúvida operacional: responde a dúvida E continua o funil no mesmo
+    #    turno (PLAN §4 "Regra mestra: resposta a dúvida com dado da tool +
+    #    próxima pergunta pendente do funil. Toda resposta avança 1 campo.").
+    #    Cai pro cálculo normal de missing abaixo — o responder lê faq_yaml
+    #    pra resolver a dúvida e usa next_question.canonical_text como avanço.
 
     # 3. Apresentação em andamento (pre_bubbles foram preparados) ->
     #    pergunta de FOCO, não funil.

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import re
 from typing import Any
 
 from zoi_agent.agent.question_planner import plan_next_question, push_asked_field
@@ -36,6 +37,16 @@ from zoi_agent.tools.photos import build_photo_payload
 from zoi_agent.tools.terminal import TERMINAL_REASONS
 
 log = get_logger(__name__)
+
+
+# Match anos 4 dígitos isolados ou notação "2023/2024", "2023/24", "/2024"
+_YEAR_TOKEN_PAT = re.compile(r"\b(?:19|20)\d{2}(?:\s*/\s*(?:19|20)?\d{2})?\b|/\s*(?:19|20)?\d{2}\b")
+
+
+def _strip_year_tokens(text: str) -> str:
+    """Remove tokens de ano (2024, 2023/2024, /24). Usado pra alargar âncora
+    quando o lead pede 'outras opções' do mesmo modelo."""
+    return re.sub(r"\s+", " ", _YEAR_TOKEN_PAT.sub("", text or "")).strip()
 
 
 # --- Task table (preempção por contactId) ---------------------------------
@@ -147,13 +158,20 @@ async def _dispatch_tools(
     want_search = update_intent_sec == "ver_outros_carros" or origem_empty
     if want_search:
         try:
-            anchor = state.collected.veiculo_interesse or ""
-            # Se origem alvo já provou estar fora de estoque, não amarra a
-            # busca ao modelo dela — alarga pra marca ou categoria do lead.
-            if origem_empty or state.origem_apresentada:
+            # Âncora: foco atual do lead (collected) tem prioridade, depois a
+            # origem do CRM. Se origem deu 0/0 NESTA rodada, drop âncora —
+            # modelo provadamente fora do estoque.
+            anchor = state.collected.veiculo_interesse or (
+                state.veiculo_origem.texto if state.veiculo_origem else ""
+            )
+            if origem_empty:
                 anchor = ""
+            # ver_outros_carros: lead quer ALTERNATIVA. Mantém marca/modelo
+            # da âncora mas descarta ano específico — se ele pediu Onix
+            # 2023/2024 e quer "outro", o Onix 2015 também é resposta válida.
+            if update_intent_sec == "ver_outros_carros":
+                anchor = _strip_year_tokens(anchor)
             query = f"{anchor} {last_message}".strip() if anchor else last_message
-            # Fallback final: query vazia/curta -> traz catálogo amplo.
             if len(query.strip()) < 3:
                 query = "veículos disponíveis"
             res = await search_inventory(
