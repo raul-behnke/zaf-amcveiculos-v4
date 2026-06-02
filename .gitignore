@@ -20,3 +20,4 @@ postgres_data/
 payloads/
 .env.prod
 deploy/.env.prod
+index-form.html
