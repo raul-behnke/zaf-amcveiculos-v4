@@ -131,6 +131,21 @@ def plan_next_question(
             skip_funnel_reason="apresentação ativa",
         )
 
+    # 3b. Apresentação IMINENTE da origem do CRM: o orchestrator vai renderizar
+    #     cards do veiculo_origem neste mesmo turno. Pede FOCO antes de nome —
+    #     evita "Esse te interessou? Como posso te chamar?" (2 perguntas/turno).
+    #     Roda só uma vez: depois que origem_apresentada=True, cai pro funil normal.
+    if (
+        state.veiculo_origem
+        and not state.origem_apresentada
+        and not state.collected.veiculo_interesse_confirmado
+    ):
+        return NextQuestion(
+            field=None, intent="foco",
+            canonical_text="Esse te interessou?",
+            skip_funnel_reason="apresentação iminente da origem do CRM",
+        )
+
     # 4. Gate de agendamento atendido -> ramo de slots/booking.
     if (
         state.collected.interesse_agendamento is True
