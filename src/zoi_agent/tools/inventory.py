@@ -72,6 +72,39 @@ class SearchResult(BaseModel):
 # --- Load + cache ----------------------------------------------------------
 
 
+def _normalize_vehicle(v: dict) -> dict:
+    """Normaliza schema da Custom Value do GHL (AMC-Stock pt-BR) pro shape
+    interno usado por apply_filters / summarize / templates.
+
+    Schema de entrada (real): id, titulo, marca, modelo, versao, categoria,
+    preco, ano_modelo, ano_fabricacao, quilometragem, combustivel, cambio,
+    cor, portas, acessorios, imagem_principal, imagens, descricao_resumida.
+    """
+    out = dict(v)
+    # id (int) -> external_id (str) usado como chave em todos os caminhos
+    if "external_id" not in out and v.get("id") is not None:
+        out["external_id"] = str(v["id"])
+    # ano_modelo -> ano (apply_filters/summarize esperam ano)
+    if "ano" not in out:
+        out["ano"] = v.get("ano_modelo") or v.get("ano_fabricacao")
+    # acessorios -> opcionais (apply_filters + render)
+    if "opcionais" not in out:
+        out["opcionais"] = v.get("acessorios") or []
+    # categoria -> carroceria (apply_filters checa carroceria/tipo_veiculo)
+    if "carroceria" not in out and v.get("categoria"):
+        out["carroceria"] = v["categoria"]
+    # descricao_resumida -> descricao (keyword blob)
+    if "descricao" not in out:
+        out["descricao"] = v.get("descricao_resumida") or v.get("texto_busca_ia") or ""
+    # Garante que imagens contenha imagem_principal como primeira
+    imgs = list(v.get("imagens") or [])
+    principal = v.get("imagem_principal")
+    if principal and (not imgs or imgs[0] != principal):
+        imgs = [principal] + [i for i in imgs if i != principal]
+    out["imagens"] = imgs
+    return out
+
+
 async def _fetch_inventory() -> list[dict]:
     cv = await get_custom_value(settings.ghl_stock_custom_value_id)
     raw = extract_value(cv) or ""
@@ -80,11 +113,22 @@ async def _fetch_inventory() -> list[dict]:
         return []
     data = json.loads(raw)
     if isinstance(data, dict):
-        items = data.get("vehicles") or data.get("items") or data.get("data") or []
+        # "veiculos" é o schema real do AMC-Stock (pt-BR); demais são fallbacks.
+        items = (
+            data.get("veiculos")
+            or data.get("vehicles")
+            or data.get("items")
+            or data.get("data")
+            or []
+        )
     elif isinstance(data, list):
         items = data
     else:
         items = []
+    # Normaliza schema heterogêneo (id->external_id, ano_modelo->ano, etc.)
+    items = [_normalize_vehicle(x) for x in items if isinstance(x, dict)]
+    # Filtra inativos se status presente
+    items = [x for x in items if (x.get("status") or "ATIVO").upper() == "ATIVO"]
     log.info("inventory_loaded", n=len(items))
     return items
 
