@@ -144,11 +144,22 @@ def plan_next_question(
             skip_funnel_reason="apresentação iminente da origem do CRM",
         )
 
-    # 4. Gate de agendamento atendido -> ramo de slots/booking.
-    if (
+    # 4. Gate de agendamento (flexibilizado vs PLAN §11):
+    #    quer_agendar: collected OU updater detectou intent=agendamento
+    #    (cobre afirmativas indiretas tipo "quais horários posso passar?").
+    #    focus_ok: confirmado=true OU foco implícito (1 card único exibido /
+    #    1 veículo apresentado). Evita travar quando o lead já engajou no
+    #    veículo da origem do CRM.
+    quer_agendar = (
         state.collected.interesse_agendamento is True
-        and state.collected.veiculo_interesse_confirmado is True
-    ):
+        or update.intent == "agendamento"
+    )
+    has_single_focus = (
+        bool(state.last_card_external_id)
+        or len(state.vehicles_shown or []) == 1
+    )
+    focus_ok = state.collected.veiculo_interesse_confirmado is True or has_single_focus
+    if quer_agendar and focus_ok:
         return NextQuestion(
             field=None, intent="agendamento",
             canonical_text="Qual horário fica melhor pra você?",

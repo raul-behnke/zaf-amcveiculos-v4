@@ -117,6 +117,7 @@ def cancel_existing(contact_id: str) -> None:
 
 async def _dispatch_tools(
     *,
+    update_intent: str | None,
     update_intent_sec: str | None,
     last_message: str,
     state,
@@ -208,10 +209,19 @@ async def _dispatch_tools(
         out["pre_bubbles"] = pre_bubbles
         out["rendered_vehicle_ids"] = rendered_ids
         out["vehicles_presented_count"] = len(rendered_ids)
-    # Gate duplo de agendamento (PLAN §11):
-    # interesse_agendamento=true AND veiculo_interesse_confirmado=true
-    quer_agendar = bool(state.collected.interesse_agendamento)
-    focus_ok = bool(state.collected.veiculo_interesse_confirmado)
+    # Gate de agendamento (PLAN §11) — flexibilizado:
+    # quer_agendar: collected ou intent=agendamento (afirmativas indiretas
+    #   tipo "quais horários?" às vezes não setam collected mas o updater
+    #   marca o intent).
+    # focus_ok: confirmado=true OU temos foco implícito (último card único
+    #   exibido OU exatamente 1 veículo apresentado na sessão). Evita travar
+    #   no gate quando o CRM trouxe o veículo de origem e o lead engajou.
+    quer_agendar = bool(state.collected.interesse_agendamento) or update_intent == "agendamento"
+    has_single_focus = (
+        bool(state.last_card_external_id)
+        or len(state.vehicles_shown or []) == 1
+    )
+    focus_ok = bool(state.collected.veiculo_interesse_confirmado) or has_single_focus
     if quer_agendar and focus_ok:
         pref = None
         # preferencia vem do update; mas só vemos isso no dispatcher novo (não temos
@@ -380,6 +390,7 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
     )
 
     tools = await _dispatch_tools(
+        update_intent=update.intent,
         update_intent_sec=update.intent_secundario,
         last_message=last_message,
         state=new_state,

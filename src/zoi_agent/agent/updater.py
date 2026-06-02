@@ -119,7 +119,10 @@ Regressão de stage é permitida (lead pode pedir ver outro carro em fechamento)
 - "duvida": pergunta operacional (financiamento, localização, etc).
 - "opt_out": pediu pra parar / xingou / irritação clara.
 - "pedido_humano": pediu vendedor.
-- "agendamento": quer marcar visita.
+- "agendamento": quer marcar visita. SEMPRE seta `collected.interesse_agendamento=true`.
+  Inclui afirmativas INDIRETAS após pergunta de agendamento — "quais horários?",
+  "quando posso passar aí?", "tem horário amanhã?", "que dia tá livre?", "posso
+  ir hoje?", "amanhã de manhã serve?". Tudo isso é CONFIRMAÇÃO de querer agendar.
 - "apresentar": quer ver opções de veículos.
 
 # intent_secundario (não exclusivo)
