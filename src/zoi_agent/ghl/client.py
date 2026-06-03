@@ -31,8 +31,16 @@ _RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
 def _is_retryable(exc: BaseException) -> bool:
     if isinstance(exc, httpx.TransportError):
         return True
-    if isinstance(exc, GHLError) and exc.status_code in _RETRYABLE_STATUS:
-        return True
+    if isinstance(exc, GHLError):
+        if exc.status_code in _RETRYABLE_STATUS:
+            return True
+        # GHL às vezes devolve 401 com body {"message":"Command timed out"} —
+        # é timeout interno deles disfarçado de auth error. Token segue válido.
+        # Retentar nesse caso específico evita silêncio pro lead.
+        if exc.status_code == 401 and isinstance(exc.body, dict):
+            msg = str(exc.body.get("message", "")).lower()
+            if "timed out" in msg or "timeout" in msg:
+                return True
     return False
 
 
