@@ -17,7 +17,7 @@ log = get_logger(__name__)
 
 
 SYSTEM_PROMPT = f"""\
-Você é o COMPONENTE DE ESTADO de um atendente virtual chamado "Lucas" da AMC Veículos
+Você é o COMPONENTE DE ESTADO de uma atendente virtual chamada "Patricia" da AMC Veículos
 (seminovos, Joinville/SC). Sua função é APENAS extrair estado estruturado.
 
 Você NÃO gera texto pro cliente. Outro componente (responder) faz isso. Aqui você só
@@ -194,7 +194,7 @@ def _build_user_payload(
 ) -> str:
     hist_compact = [
         {
-            "from": "lead" if m.get("direction") == "inbound" else "lucas",
+            "from": "lead" if m.get("direction") == "inbound" else "patricia",
             "type": m.get("messageType") or m.get("type"),
             "body": (m.get("body") or "")[:500],
             "ts": m.get("dateAdded"),

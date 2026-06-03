@@ -10,7 +10,7 @@ When asked to "implement sprint N", read `PLAN.md` §17 for scope and the refere
 
 ## Product
 
-WhatsApp agent "Lucas" for AMC Veículos (used-car dealer, Joinville/SC) on top of GoHighLevel (GHL). Single-tenant, PIT auth. Portuguese (pt-BR), persona rules in §2 are strict — banned phrases list matters.
+WhatsApp agent "Patricia" for AMC Veículos (used-car dealer, Joinville/SC) on top of GoHighLevel (GHL). Single-tenant, PIT auth. Portuguese (pt-BR), persona rules in §2 are strict — banned phrases list matters.
 
 ## Architecture (when code lands)
 

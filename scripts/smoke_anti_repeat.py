@@ -5,7 +5,7 @@ Após cada turno, alimenta o "history_recent" com as bolhas anteriores e checa q
 nenhuma bolha nova bate >70% de similaridade (difflib.SequenceMatcher) com qualquer
 bolha já enviada nos turnos anteriores.
 
-Critério de aprovação: para cada par (nova bolha, bolha anterior do lucas),
+Critério de aprovação: para cada par (nova bolha, bolha anterior da patricia),
 ratio < 0.7. Tolerância 0.7 por causa de pequenas similaridades naturais (saudação
 inicial vs frases curtas).
 """
@@ -137,7 +137,7 @@ def normalize(s: str) -> str:
 async def main() -> int:
     print(f"\n=== C25 anti-repetição (5 turnos, threshold 0.70) ===\n")
     history: list[dict] = [msg("outbound", "Olá! 👋 Bem-vindo à AMC Veículos. Vi que você demonstrou interesse no Chevrolet Montana 🚗. Posso te passar mais informações sobre ele?")]
-    all_lucas_bubbles: list[str] = []
+    all_patricia_bubbles: list[str] = []
     fail_count = 0
 
     for label, state, update, last_msg, tools in SCENARIOS:
@@ -155,7 +155,7 @@ async def main() -> int:
         # Validação anti-repetição
         for new_b in bubbles:
             n = normalize(new_b)
-            for old_b in all_lucas_bubbles:
+            for old_b in all_patricia_bubbles:
                 ratio = SequenceMatcher(None, n, normalize(old_b)).ratio()
                 if ratio >= 0.70:
                     print(f"  ❌ similaridade {ratio:.2f}")
@@ -174,7 +174,7 @@ async def main() -> int:
                         print(f"  ❌ abertura com nome detectada: {b!r}")
                         fail_count += 1
 
-        all_lucas_bubbles.extend(bubbles)
+        all_patricia_bubbles.extend(bubbles)
 
     print(f"\n=== RESULTADO ===\n  falhas: {fail_count}")
     return 0 if fail_count == 0 else 1

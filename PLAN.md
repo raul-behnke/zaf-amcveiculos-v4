@@ -21,7 +21,7 @@ Plano consolidado. Cliente: AMC Veículos (seminovos, Joinville/SC). Base: ZOI A
 
 ---
 
-## 2. Persona — Lucas
+## 2. Persona — Patricia
 
 **Quem é**: atendente virtual da AMC Veículos. Não declara IA (evasivo); se perguntado de novo, admite: *"Sou um atendente digital da AMC, qualquer detalhe específico passo pra um consultor."*
 
@@ -472,7 +472,7 @@ Ordem fase a fase. Cada sprint termina com smoke test do cenário relevante.
 - Test: cenários de extração (input fake conversation → state esperado).
 
 ### Sprint 6 — Responder LLM
-- `agent/responder.py`: prompt persona Lucas + multi-bubble parser.
+- `agent/responder.py`: prompt persona Patricia + multi-bubble parser.
 - Test: gera bubbles válidos, última pergunta = próximo campo.
 
 ### Sprint 7 — Orchestrator

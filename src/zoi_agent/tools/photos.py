@@ -9,6 +9,7 @@ Estratégia de seleção do alvo (em ordem):
 """
 from __future__ import annotations
 
+from difflib import SequenceMatcher
 from typing import Any
 
 from zoi_agent.agent.schemas import SessionState
@@ -18,6 +19,23 @@ from zoi_agent.tools.inventory import (
     load_inventory,
     norm,
 )
+
+
+_FUZZY_THRESHOLD = 0.75
+
+
+def _fuzzy_modelo_in_text(modelo_norm: str, text: str) -> bool:
+    """True se algum token do texto bate fuzzy com o modelo (cobre typos
+    tipo 'Crize' -> 'cruze'). Tokens com <4 chars são ignorados pra evitar
+    falsos positivos (ex: 'do', 'um')."""
+    if not modelo_norm or len(modelo_norm) < 4:
+        return False
+    for tok in text.split():
+        if len(tok) < 4:
+            continue
+        if SequenceMatcher(None, modelo_norm, tok).ratio() >= _FUZZY_THRESHOLD:
+            return True
+    return False
 
 log = get_logger(__name__)
 
@@ -66,6 +84,32 @@ def _find_by_keyword(
             chosen = _match_modelo_ano(m, year)
             if chosen:
                 return chosen
+
+    # 1b) Fuzzy match contra subset shown (typos tipo "Crize" -> "Cruze").
+    #     Restrito ao que o lead já viu pra evitar match em estoque inteiro.
+    if candidates_subset:
+        for v in candidates_subset:
+            m = norm(v.get("modelo"))
+            if m and _fuzzy_modelo_in_text(m, text):
+                chosen = _match_modelo_ano(m, year) or v
+                log.info(
+                    "photo_target_fuzzy_shown",
+                    external_id=chosen.get("external_id"),
+                    modelo=m,
+                )
+                return chosen
+
+    # 1c) Fuzzy contra inventário completo (último recurso pré-fallbacks).
+    for v in inventory:
+        m = norm(v.get("modelo"))
+        if m and _fuzzy_modelo_in_text(m, text):
+            chosen = _match_modelo_ano(m, year) or v
+            log.info(
+                "photo_target_fuzzy_inventory",
+                external_id=chosen.get("external_id"),
+                modelo=m,
+            )
+            return chosen
 
     # 2) Só ano no texto + fallback_modelo (foco/contexto) -> exact match.
     if year is not None and fallback_modelo:
