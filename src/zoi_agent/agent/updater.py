@@ -55,6 +55,30 @@ aceitou aquele veículo e podemos seguir qualificando o funil sem re-apresentar.
   * Se foi escolha explícita de algo já em vehicles_shown -> confirmado=true.
   * Se foi nova categoria -> confirmado=false, stage volta para apresentacao.
 
+# RESPOSTA CURTA -> AMARRA NA ÚLTIMA PERGUNTA (CRÍTICO)
+Quando a mensagem do lead é CURTA (≤ 5 palavras) e/ou monossilábica
+("Sim", "Não", "Tá", "É", "Pode", "Claro", "Quitado", "Quitadinho",
+"Tô", "Aham", "Yep"), você DEVE:
+  1. Olhar a ÚLTIMA bolha da `patricia` no `history_recent` (o turno
+     imediatamente anterior).
+  2. Identificar QUAL campo do funil ela estava perguntando.
+  3. Amarrar a resposta curta nesse campo. NUNCA ignore.
+
+Exemplos REAIS de amarração:
+- Patricia: "Tá quitado?" + Lead: "Sim"
+  -> collected.troca_completa.quitado=true
+- Patricia: "Me passa o ano do seu Gol?" + Lead: "É um 2001"
+  -> collected.troca_completa.ano=2001
+- Patricia: "É compra direta ou troca?" + Lead: "Troca"
+  -> intencao="troca", possui_troca=true
+- Patricia: "Você é de qual cidade?" + Lead: "Joinville"
+  -> collected.cidade="Joinville"
+- Patricia: "Como posso te chamar?" + Lead: "Raul"
+  -> collected.nome="Raul"
+
+PROIBIDO deixar campo null quando a resposta curta CASA com a pergunta
+imediatamente anterior. Esse é o erro mais comum — não repita.
+
 # INFERÊNCIA CONTEXTUAL (alta confiança apenas)
 Extraia campos a partir de PERGUNTAS, MENÇÕES INCIDENTAIS e CONTEXTO,
 não só de respostas diretas. Exemplos:
