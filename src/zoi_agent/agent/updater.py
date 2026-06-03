@@ -12,6 +12,7 @@ from zoi_agent.agent.schemas import (
 from zoi_agent.config import settings
 from zoi_agent.llm import parse_structured
 from zoi_agent.logging import get_logger
+from zoi_agent.tools.inventory import load_inventory
 
 log = get_logger(__name__)
 
@@ -205,6 +206,53 @@ REGRA OBRIGATÓRIA: se `should_handoff=true`, então `terminal_reason` DEVE ser 
 - Se o lead deu preferência VAGA (apenas "amanhã de manhã"), preencha
   `preferencia_horario` em vez de chosen_slot_iso.
 
+# ESCOLHA DE FOTO — `photo_target_external_id` (CRÍTICO)
+Esse campo SÓ É PREENCHIDO quando o turno atual tem `pedido_foto` em
+`topics` (ou `intent_secundario=pedido_foto`). Nos demais turnos, DEIXE
+NULL — não escolha proativamente.
+
+Regra: você só pode escolher um `external_id` que esteja LITERALMENTE
+presente em `candidates_for_photo` no input (lista enumerada com
+external_id + titulo + marca + modelo + ano). PROIBIDO inventar ID,
+PROIBIDO adivinhar dígitos, PROIBIDO escolher ID de outra fonte. Se o
+ID que você quer mandar não está nessa lista, retorne NULL —
+orchestrator vai cair em fallback determinístico seguro.
+
+Prioridade de decisão (do mais específico pro mais geral):
+  1. Lead NOMEOU o veículo no turno atual de forma clara:
+     - "manda a Duster" → procure por modelo="Duster" em candidates.
+     - "fotos do Cruze 2014" → procure modelo="Cruze" E ano=2014.
+     - "fotos do Honda Fit" → procure marca="Honda" E modelo="Fit".
+     - "manda a primeira opção" / "esse Renault" → use last_card ou
+       primeiro de vehicles_shown_details que case com a marca dita.
+  2. Lead usou REFERÊNCIA ANAFÓRICA no turno atual:
+     - "esse aí" / "esse" / "manda mais" / "manda a foto" sem nome →
+       use `last_card_external_id` se existir, senão último de
+       `vehicles_shown_details`.
+  3. Lead acabou de chegar pelo greet (history só tem 1-2 turnos),
+     pediu foto sem nomear nada, candidates tem `origem_match` → use
+     o external_id de `origem_match`.
+
+REGRAS DE ANTI-ALUCINAÇÃO:
+  - "fitos da Duster" é typo de "fotos da Duster" → escolha Duster,
+    NÃO Honda Fit. Substring acidental não é nomeação.
+  - Se 2 modelos batem por nome (ex: candidates tem Cruze 2014 e
+    Cruze 2018, lead disse "manda o Cruze"), prefira o ÚLTIMO
+    apresentado em vehicles_shown_details. Se nenhum foi apresentado,
+    use o último adicionado em candidates.
+  - Se candidates está VAZIO ou nenhum bate com o que o lead disse,
+    retorne NULL.
+  - Se o lead reclamou no turno anterior que recebeu foto errada
+    ("você me passou foto de outro carro", "não era esse"), olhe
+    qual veículo ESTÁ EM FOCO (vehicle_in_focus / origem_match) e
+    escolha esse, NÃO o que foi enviado errado antes.
+
+Validação interna que VOCÊ deve fazer antes de retornar o ID:
+  - O external_id que você vai colocar EXISTE literalmente em
+    candidates_for_photo? Se não, NULL.
+  - Você consegue justificar com 1 frase qual sinal do lead levou a
+    esse ID? Se não, NULL.
+
 # Importante
 - Seja conservador: não invente dados. Se o lead foi vago, deixe campo null.
 - Não duplicar contagem: deltas são 0 ou 1 por turno.
@@ -213,7 +261,48 @@ REGRA OBRIGATÓRIA: se `should_handoff=true`, então `terminal_reason` DEVE ser 
 """
 
 
-def _build_user_payload(
+def _vehicle_brief(v: dict) -> dict:
+    return {
+        "external_id": str(v.get("external_id")),
+        "titulo": v.get("titulo"),
+        "marca": v.get("marca"),
+        "modelo": v.get("modelo"),
+        "ano": v.get("ano"),
+    }
+
+
+async def _build_photo_candidates(state: SessionState) -> list[dict]:
+    """Lista enxuta e auditável de veículos elegíveis a foto neste turno.
+    Inclui: vehicles_shown (últimos 8), last_card e origem_match. Sem dups.
+    """
+    inv = await load_inventory()
+    if not inv:
+        return []
+    by_id = {str(v.get("external_id")): v for v in inv}
+
+    ids_ordered: list[str] = []
+    seen: set[str] = set()
+
+    def _add(eid: str | None) -> None:
+        if not eid or eid in seen or eid not in by_id:
+            return
+        seen.add(eid)
+        ids_ordered.append(eid)
+
+    # 1) vehicles_shown últimos primeiro (mais relevantes pro turno atual)
+    for eid in reversed(state.vehicles_shown or []):
+        _add(str(eid))
+    # 2) last_card
+    _add(state.last_card_external_id)
+    # 3) origem matches (lead chegou anchored)
+    if state.veiculo_origem and state.veiculo_origem.matches_external_ids:
+        for eid in state.veiculo_origem.matches_external_ids:
+            _add(str(eid))
+
+    return [_vehicle_brief(by_id[eid]) for eid in ids_ordered[:12]]
+
+
+async def _build_user_payload(
     *, history: list[dict], state: SessionState, last_message: str
 ) -> str:
     hist_compact = [
@@ -225,11 +314,13 @@ def _build_user_payload(
         }
         for m in history[-30:]  # mantém payload enxuto
     ]
+    candidates_for_photo = await _build_photo_candidates(state)
     return json.dumps(
         {
             "session_state": state.model_dump(),
             "history": hist_compact,
             "last_message": last_message,
+            "candidates_for_photo": candidates_for_photo,
         },
         ensure_ascii=False,
         default=str,
@@ -242,7 +333,9 @@ async def run_updater(
     state: SessionState,
     last_message: str,
 ) -> StateUpdate:
-    user = _build_user_payload(history=history, state=state, last_message=last_message)
+    user = await _build_user_payload(
+        history=history, state=state, last_message=last_message
+    )
     log.info(
         "updater_call",
         stage=state.stage,
@@ -257,6 +350,31 @@ async def run_updater(
         component="updater",
         temperature=0.0,
     )
+
+    # Validação pós-LLM do photo_target_external_id: ID precisa existir no
+    # inventário E (preferencialmente) estar entre candidates_for_photo. Se
+    # falhar, zera e cai pro fallback determinístico no orchestrator.
+    if out.photo_target_external_id:
+        eid = str(out.photo_target_external_id).strip()
+        valid = False
+        if eid:
+            try:
+                inv = await load_inventory()
+                inv_ids = {str(v.get("external_id")) for v in (inv or [])}
+                if eid in inv_ids:
+                    valid = True
+            except Exception as e:
+                log.warning("updater_photo_validate_failed", err=str(e))
+        if valid:
+            log.info("updater_photo_target_picked", external_id=eid)
+            out.photo_target_external_id = eid
+        else:
+            log.warning(
+                "updater_photo_target_invalid_dropped",
+                attempted=out.photo_target_external_id,
+            )
+            out.photo_target_external_id = None
+
     log.info(
         "updater_result",
         stage=out.stage,
@@ -264,6 +382,7 @@ async def run_updater(
         intent_sec=out.intent_secundario,
         should_handoff=out.should_handoff,
         terminal=out.terminal_reason,
+        photo_target=out.photo_target_external_id,
     )
     return out
 

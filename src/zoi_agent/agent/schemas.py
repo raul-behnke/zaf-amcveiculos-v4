@@ -96,6 +96,17 @@ class StateUpdate(BaseModel):
     ai_identity_asked_count_delta: int = Field(
         default=0, description="Incremento (0 ou 1)"
     )
+    photo_target_external_id: str | None = Field(
+        default=None,
+        description=(
+            "Quando intent_secundario=pedido_foto OU 'pedido_foto' está em topics: "
+            "external_id do veículo cujas fotos devem ser enviadas, ESCOLHIDO "
+            "estritamente da lista candidates fornecida no input. "
+            "DEIXE NULL se: (1) intent não é pedido_foto, (2) lead não nomeou "
+            "veículo e não há contexto claro, (3) dúvida real sobre qual alvo. "
+            "PROIBIDO inventar ID que não esteja em candidates."
+        ),
+    )
 
 
 class VeiculoOrigem(BaseModel):

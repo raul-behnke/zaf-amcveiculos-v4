@@ -203,6 +203,50 @@ async def pick_target_vehicle(
     return None
 
 
+def _payload_for_vehicle(v: dict) -> dict[str, Any]:
+    imgs = v.get("imagens") or []
+    single_only = len(imgs) == 1
+    send_imgs: list[str] = [] if len(imgs) < 2 else imgs
+    return {
+        "available": True,
+        "vehicle": {
+            "external_id": v.get("external_id"),
+            "titulo": v.get("titulo"),
+            "marca": v.get("marca"),
+            "modelo": v.get("modelo"),
+            "ano": v.get("ano"),
+            "preco": v.get("preco"),
+            "cambio": v.get("cambio"),
+            "quilometragem": v.get("quilometragem"),
+        },
+        "images": send_imgs,
+        "single_image_only": single_only,
+        "will_send_count": len(send_imgs),
+    }
+
+
+async def build_photo_payload_by_id(
+    *, external_id: str, state: SessionState
+) -> dict[str, Any]:
+    """Pega o veículo pelo external_id confiável (vindo do updater LLM)
+    e monta o mesmo payload que build_photo_payload. Sem heurística textual."""
+    inventory = await load_inventory()
+    if not inventory:
+        return {
+            "available": False, "vehicle": None, "images": [],
+            "single_image_only": False, "will_send_count": 0,
+        }
+    v = _find_by_external_id(str(external_id), inventory)
+    if not v:
+        log.warning("photo_target_id_not_found", external_id=external_id)
+        return {
+            "available": False, "vehicle": None, "images": [],
+            "single_image_only": False, "will_send_count": 0,
+        }
+    log.info("photo_target_by_id", external_id=v.get("external_id"))
+    return _payload_for_vehicle(v)
+
+
 async def build_photo_payload(
     *, last_message: str, state: SessionState
 ) -> dict[str, Any]:

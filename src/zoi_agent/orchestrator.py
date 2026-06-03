@@ -33,7 +33,7 @@ from zoi_agent.tools.faq import get_faq_raw
 from zoi_agent.tools.handoff import encaminhar_para_vendedor
 from zoi_agent.tools.inventory import get_vehicle_details, search_inventory
 from zoi_agent.tools.origem import buscar_veiculo_interesse_origem
-from zoi_agent.tools.photos import build_photo_payload
+from zoi_agent.tools.photos import build_photo_payload, build_photo_payload_by_id
 from zoi_agent.tools.terminal import TERMINAL_REASONS
 
 log = get_logger(__name__)
@@ -124,6 +124,7 @@ async def _dispatch_tools(
     update_topics: list[str] | None = None,
     update_preferencia_dia: str | None = None,
     update_preferencia_periodo: str | None = None,
+    update_photo_target_external_id: str | None = None,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {}
 
@@ -254,9 +255,19 @@ async def _dispatch_tools(
 
     if "pedido_foto" in topics:
         try:
-            out["photos"] = await build_photo_payload(
-                last_message=last_message, state=state
-            )
+            # Updater LLM já escolheu o alvo a partir de candidates_for_photo
+            # validados contra inventário. Se veio ID → usa direto, sem
+            # heurística textual (evita substring tipo "fitos"→Fit).
+            # Se updater devolveu null/invalid → cai pro picker determinístico
+            # (com fuzzy match anti-typo + fallbacks).
+            if update_photo_target_external_id:
+                out["photos"] = await build_photo_payload_by_id(
+                    external_id=update_photo_target_external_id, state=state
+                )
+            else:
+                out["photos"] = await build_photo_payload(
+                    last_message=last_message, state=state
+                )
         except Exception as e:
             log.error("photos_payload_failed", err=str(e))
             out["photos"] = {
@@ -435,6 +446,7 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
         update_topics=list(update.topics or []),
         update_preferencia_dia=(update.preferencia_horario.dia if update.preferencia_horario else None),
         update_preferencia_periodo=(update.preferencia_horario.periodo if update.preferencia_horario else None),
+        update_photo_target_external_id=update.photo_target_external_id,
         last_message=last_message,
         state=new_state,
     )
