@@ -67,6 +67,7 @@ class SearchResult(BaseModel):
     exatos: list[VehicleSummary]
     parecidos: list[dict]  # {"vehicle": VehicleSummary, "motivo": str}
     total: int
+    filters_used: dict = {}  # snapshot dos filtros do mini-LLM (marca/modelo/etc)
 
 
 # --- Load + cache ----------------------------------------------------------
@@ -396,11 +397,14 @@ async def search_inventory(
     exatos_raw = [v for v in apply_filters(inv, filters) if v.get("external_id") not in excl]
     limit = filters.limit or settings.inventory_search_limit
 
+    filters_snapshot = filters.model_dump(exclude_none=True)
+
     if len(exatos_raw) >= limit:
         return SearchResult(
             exatos=[summarize(v) for v in exatos_raw[:limit]],
             parecidos=[],
             total=len(exatos_raw),
+            filters_used=filters_snapshot,
         )
 
     # Restringe candidatos a parecidos: tudo que não está em exatos nem excl
@@ -424,6 +428,7 @@ async def search_inventory(
         exatos=[summarize(v) for v in exatos_raw],
         parecidos=parecidos_out,
         total=len(exatos_raw) + len(parecidos_out),
+        filters_used=filters_snapshot,
     )
 
 

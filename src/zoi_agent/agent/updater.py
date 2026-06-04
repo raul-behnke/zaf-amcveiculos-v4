@@ -51,6 +51,19 @@ aceitou aquele veículo e podemos seguir qualificando o funil sem re-apresentar.
   * `veiculo_interesse_confirmado=false`
   * stage="apresentacao", `intent="apresentar"`,
     `intent_secundario="ver_outros_carros"`. NÃO peça nome ainda.
+
+# MODELO ESPECÍFICO NOMINADO (REGRA SUPREMA — vence origem do anúncio)
+Quando o lead nomeia marca/modelo específico em QUALQUER stage — inclusive
+abertura, mesmo que `veiculo_origem` do anúncio seja outro carro — ex:
+"tem algum FOX?", "queria um Onix", "procuro Civic", "vocês têm Duster?",
+"tem HB20?":
+  * `veiculo_interesse=<modelo nominado pelo lead>` (sobrescreve qualquer valor anterior)
+  * `veiculo_interesse_confirmado=false`
+  * `intent="apresentar"`, `intent_secundario="ver_outros_carros"`
+  * `topics` DEVE incluir `"ver_outros_carros"`
+  * stage="apresentacao"
+O desejo ATUAL do lead vence o anúncio de origem. Não importa que o lead
+veio do anúncio do Sentra — se ele perguntou por FOX, FOX é o foco da busca.
 - Lead muda foco para outro veículo durante o funil:
   * Substitua `veiculo_interesse` pelo novo texto.
   * Se foi escolha explícita de algo já em vehicles_shown -> confirmado=true.

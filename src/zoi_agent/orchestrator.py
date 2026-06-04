@@ -143,8 +143,14 @@ async def _dispatch_tools(
     # -> traz matches do estoque ANTES de qualificar (PLAN §5 + §16 C4).
     # Gate usa flag origem_apresentada (set abaixo independente de ter rendido).
     # Evita refazer a mesma busca toda rodada quando origem deu 0/0.
+    #
+    # EXCEÇÃO: se o lead nomeou modelo específico neste turno
+    # (topic=ver_outros_carros), o desejo ATUAL tem precedência sobre o anúncio
+    # de origem. Pular origem evita despejar "parecidos da Sentra" quando lead
+    # acabou de pedir FOX.
     origem_empty = False
-    if state.veiculo_origem and not state.origem_apresentada:
+    lead_pediu_modelo = "ver_outros_carros" in topics
+    if state.veiculo_origem and not state.origem_apresentada and not lead_pediu_modelo:
         try:
             origem = await buscar_veiculo_interesse_origem(state)
             # Mesmo com 0/0, marca apresentada -> não refaz a mesma busca nas
@@ -174,9 +180,15 @@ async def _dispatch_tools(
     want_search = "ver_outros_carros" in topics or origem_empty
     if want_search:
         try:
-            anchor = state.collected.veiculo_interesse or (
-                state.veiculo_origem.texto if state.veiculo_origem else ""
-            )
+            # Quando lead pediu modelo específico, NUNCA usar texto do anúncio
+            # como anchor — evita contaminar query com modelo errado (ex:
+            # "Nissan Sentra Tem algum FOX?" virava filtro Sentra ao invés de Fox).
+            if lead_pediu_modelo:
+                anchor = state.collected.veiculo_interesse or ""
+            else:
+                anchor = state.collected.veiculo_interesse or (
+                    state.veiculo_origem.texto if state.veiculo_origem else ""
+                )
             if origem_empty:
                 anchor = ""
             if "ver_outros_carros" in topics:
@@ -189,6 +201,19 @@ async def _dispatch_tools(
                 exclude_ids=list(state.vehicles_shown or []),
             )
             out["search_results"] = res.model_dump()
+            # Sinaliza ao responder quando lead pediu modelo específico e NÃO
+            # temos exatos no estoque. Responder vai reconhecer "não temos X"
+            # antes de listar parecidos (sem fingir disponibilidade).
+            modelo_pedido = (res.filters_used or {}).get("modelo")
+            if (
+                "ver_outros_carros" in topics
+                and modelo_pedido
+                and not res.exatos
+            ):
+                out["modelo_solicitado_indisponivel"] = {
+                    "modelo": modelo_pedido,
+                    "tem_alternativas": bool(res.parecidos),
+                }
         except Exception as e:
             log.error("search_inventory_failed", err=str(e))
             out["search_results"] = {"error": str(e)}
@@ -201,14 +226,27 @@ async def _dispatch_tools(
     # de search_results (fallback acima) é quem assume o pre-render.
     om = (out.get("origem_matches") or {}).get("matches") or {}
     origem_has_content = bool(om.get("exatos") or om.get("parecidos"))
-    if origem_has_content:
+    sr = out.get("search_results") or {}
+    search_has_content = (
+        bool(sr) and not sr.get("error") and bool(sr.get("exatos") or sr.get("parecidos"))
+    )
+    # Precedência: desejo ATUAL (search_results disparado por ver_outros_carros)
+    # vence o anúncio de origem. Sem isso, "lead pediu FOX mas origem=Sentra"
+    # renderiza parecidos da Sentra e ignora o Fox encontrado.
+    prefer_search = lead_pediu_modelo and search_has_content
+    if prefer_search:
+        exatos = sr.get("exatos") or []
+        parecidos = [p.get("vehicle") for p in (sr.get("parecidos") or []) if p.get("vehicle")]
+        bs, ids = build_vehicle_blocks_with_ids(exatos=exatos, parecidos=parecidos)
+        pre_bubbles.extend(bs)
+        rendered_ids.extend(ids)
+    elif origem_has_content:
         exatos = om.get("exatos") or []
         parecidos = [p.get("vehicle") for p in (om.get("parecidos") or []) if p.get("vehicle")]
         bs, ids = build_vehicle_blocks_with_ids(exatos=exatos, parecidos=parecidos)
         pre_bubbles.extend(bs)
         rendered_ids.extend(ids)
-    elif out.get("search_results") and not out["search_results"].get("error"):
-        sr = out["search_results"]
+    elif search_has_content:
         exatos = sr.get("exatos") or []
         parecidos = [p.get("vehicle") for p in (sr.get("parecidos") or []) if p.get("vehicle")]
         bs, ids = build_vehicle_blocks_with_ids(exatos=exatos, parecidos=parecidos)
