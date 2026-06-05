@@ -28,7 +28,7 @@ from zoi_agent.db import sessions as session_repo
 from zoi_agent.ghl import conversations as ghl_conv
 from zoi_agent.logging import get_logger
 from zoi_agent.metrics import TURNS_TOTAL
-from zoi_agent.tools.calendar import book_appointment, propose_slots
+from zoi_agent.tools.calendar import book_appointment, find_exact_slot, propose_slots
 from zoi_agent.tools.faq import get_faq_raw
 from zoi_agent.tools.handoff import encaminhar_para_vendedor
 from zoi_agent.tools.inventory import get_vehicle_details, search_inventory
@@ -272,6 +272,27 @@ async def _dispatch_tools(
     )
     focus_ok = bool(state.collected.veiculo_interesse_confirmado) or has_single_focus
     if quer_agendar and focus_ok:
+        # CAMINHO RÁPIDO: lead deu horário explícito (ex: "passo aí umas 10:00").
+        # Antes de propor uma lista, verifica se o calendário tem slot real
+        # naquele horário (±15min). Se sim, marca como slot escolhido pro
+        # bloco de booking lá embaixo agendar direto — sem fazer o lead
+        # escolher de uma lista. Isso atende leads que pedem horário
+        # específico fora dos que o agente já propôs em texto.
+        if update_preferencia_hora:
+            try:
+                exact = await find_exact_slot(
+                    dia=update_preferencia_dia,
+                    hora=update_preferencia_hora,
+                )
+                if exact:
+                    out["auto_book_slot_iso"] = exact.iso
+                    out["auto_book_requested_hora"] = update_preferencia_hora
+            except Exception as e:
+                log.error("find_exact_slot_failed", err=str(e))
+
+        # Sempre propõe slots também (fallback caso a hora pedida não exista
+        # OU caso o lead não tenha dado hora). Responder usa auto_book pra
+        # confirmar; se não houve auto_book, usa slots pra negociar.
         try:
             slots, fallback = await propose_slots(
                 dia=update_preferencia_dia,
@@ -516,28 +537,43 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
         )
         update.terminal_reason = None
 
-    # Booking: lead aceitou slot proposto -> book ANTES do responder
-    if update.chosen_slot_iso:
+    # Booking: 2 caminhos de slot escolhido
+    #   1) `update.chosen_slot_iso` — lead aceitou slot que JÁ tinha sido proposto
+    #      pela Patricia em texto (caminho clássico).
+    #   2) `tools.auto_book_slot_iso` — lead deu horário explícito (ex: "10:00")
+    #      e o orquestrador encontrou slot real no calendário sem precisar
+    #      propor lista. Auto-agendamento direto do desejo do lead.
+    slot_to_book = update.chosen_slot_iso or tools.get("auto_book_slot_iso")
+    booking_source = "lead_pick" if update.chosen_slot_iso else "auto_match"
+    if slot_to_book:
         try:
             modelo = new_state.collected.veiculo_interesse
             booked = await book_appointment(
                 contact_id=contact_id,
-                slot_iso=update.chosen_slot_iso,
+                slot_iso=slot_to_book,
                 lead_name=new_state.collected.nome,
                 modelo=modelo,
             )
             new_state.appointment = {
-                "slot_iso": update.chosen_slot_iso,
+                "slot_iso": slot_to_book,
                 "id": (booked.get("appointment") or {}).get("id") or booked.get("id"),
                 "modelo": modelo,
             }
-            tools["booking"] = {"ok": True, "slot": update.chosen_slot_iso}
+            tools["booking"] = {
+                "ok": True,
+                "slot": slot_to_book,
+                "source": booking_source,
+            }
+            log.info(
+                "auto_book_success" if booking_source == "auto_match" else "lead_pick_book_success",
+                contact_id=contact_id, slot=slot_to_book,
+            )
             # Promove terminal_reason se updater não tiver setado
             if not update.terminal_reason:
                 update.terminal_reason = "qualificado_agendado"
         except Exception as e:
-            log.error("book_appointment_failed", err=str(e))
-            tools["booking"] = {"ok": False, "error": str(e)}
+            log.error("book_appointment_failed", err=str(e), source=booking_source)
+            tools["booking"] = {"ok": False, "error": str(e), "source": booking_source}
             # PLAN §11 conflito de slot -> handoff_erro
             if not update.terminal_reason:
                 update.terminal_reason = "handoff_erro"

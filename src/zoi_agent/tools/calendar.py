@@ -159,6 +159,70 @@ def _filter_and_pick(
     return picked
 
 
+async def find_exact_slot(
+    *,
+    dia: str | None,
+    hora: str,
+    tolerance_min: int = 15,
+    janela_dias: int = 14,
+) -> Slot | None:
+    """Busca slot disponível no calendário que case com (dia + hora) pedidos
+    pelo lead — independente do que o agente tenha proposto em texto.
+
+    Retorna o Slot mais próximo do horário pedido DENTRO de `tolerance_min`
+    minutos. `dia` opcional (default = primeiro dia futuro com slot na hora).
+    None se nada disponível dentro da tolerância.
+
+    Uso: lead diz "passo aí umas 10:00" → orquestrador checa se há slot real
+    pras 10:00 → se sim, agenda direto sem propor lista.
+    """
+    target = _parse_hora(hora)
+    if not target:
+        return None
+    th, tm = target
+    tz = ZoneInfo(settings.app_timezone)
+    now = datetime.now(tz)
+    end = now + timedelta(days=janela_dias)
+    client = get_client()
+    raw = await client.get(
+        f"/calendars/{settings.ghl_calendar_id}/free-slots",
+        params={
+            "startDate": int(now.timestamp() * 1000),
+            "endDate": int(end.timestamp() * 1000),
+        },
+        operation="calendar.free_slots",
+    )
+    days_sorted = sorted(k for k in raw.keys() if "T" not in k and "-" in k)
+    best: tuple[int, Slot] | None = None
+    for dkey in days_sorted:
+        block = raw.get(dkey) or {}
+        for s in block.get("slots") or []:
+            try:
+                d = dtparser.isoparse(s)
+            except Exception:
+                continue
+            if d <= now:
+                continue
+            if not _matches_day_hint(d, dia, now):
+                continue
+            delta = abs(d.hour * 60 + d.minute - (th * 60 + tm))
+            if delta > tolerance_min:
+                continue
+            if best is None or delta < best[0]:
+                best = (delta, Slot(iso=s))
+        if best and dia:
+            # com dia explícito, não procura nos dias seguintes
+            break
+    if best:
+        log.info(
+            "calendar_exact_slot_found",
+            dia=dia, hora=hora, slot=best[1].iso, delta_min=best[0],
+        )
+        return best[1]
+    log.info("calendar_exact_slot_miss", dia=dia, hora=hora)
+    return None
+
+
 async def propose_slots(
     *,
     dia: str | None = None,
