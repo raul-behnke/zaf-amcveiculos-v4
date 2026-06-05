@@ -124,6 +124,7 @@ async def _dispatch_tools(
     update_topics: list[str] | None = None,
     update_preferencia_dia: str | None = None,
     update_preferencia_periodo: str | None = None,
+    update_preferencia_hora: str | None = None,
     update_photo_target_external_id: str | None = None,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {}
@@ -275,6 +276,7 @@ async def _dispatch_tools(
             slots, fallback = await propose_slots(
                 dia=update_preferencia_dia,
                 periodo=update_preferencia_periodo,
+                hora=update_preferencia_hora,
                 limit=3,
             )
             out["slots"] = [{"iso": s.iso, "label": s.label_pt()} for s in slots]
@@ -484,6 +486,7 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
         update_topics=list(update.topics or []),
         update_preferencia_dia=(update.preferencia_horario.dia if update.preferencia_horario else None),
         update_preferencia_periodo=(update.preferencia_horario.periodo if update.preferencia_horario else None),
+        update_preferencia_hora=(update.preferencia_horario.hora if update.preferencia_horario else None),
         update_photo_target_external_id=update.photo_target_external_id,
         last_message=last_message,
         state=new_state,
@@ -494,6 +497,24 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
         "canonical_text": next_q.canonical_text,
         "skip_funnel_reason": next_q.skip_funnel_reason,
     }
+
+    # GUARD RAIL: terminal=qualificado_agendado SÓ pode existir se houve
+    # booking real. Updater não pode setar essa terminal sem o orchestrator
+    # ter rodado book_appointment com sucesso. Bug visto em prod: updater
+    # setou terminal por conta própria quando lead disse "passo aí umas 10:00",
+    # sem chosen_slot_iso válido → CRM marcou qualificado_agendado mas
+    # calendário ficou vazio. Aqui esmagamos terminal prematuro.
+    if (
+        update.terminal_reason == "qualificado_agendado"
+        and not update.chosen_slot_iso
+        and not new_state.appointment
+    ):
+        log.warning(
+            "stripped_premature_terminal",
+            contact_id=contact_id,
+            reason="qualificado_agendado sem booking real",
+        )
+        update.terminal_reason = None
 
     # Booking: lead aceitou slot proposto -> book ANTES do responder
     if update.chosen_slot_iso:

@@ -84,16 +84,39 @@ def _matches_day_hint(d: datetime, hint: str | None, now: datetime) -> bool:
     return True
 
 
+def _parse_hora(hora: str | None) -> tuple[int, int] | None:
+    """'10:00' / '10' / '10h' / '10:30' -> (10, 0) / (10, 30). None se inválido."""
+    if not hora:
+        return None
+    s = hora.strip().lower().replace("h", ":").rstrip(":")
+    parts = s.split(":")
+    try:
+        h = int(parts[0])
+        m = int(parts[1]) if len(parts) > 1 and parts[1] else 0
+        if 0 <= h <= 23 and 0 <= m <= 59:
+            return h, m
+    except (ValueError, IndexError):
+        pass
+    return None
+
+
 def _filter_and_pick(
     by_day: dict[str, dict],
     *,
     dia: str | None,
     periodo: Period | None,
+    hora: str | None,
     limit: int,
     now: datetime,
 ) -> list[Slot]:
-    """Filtra + interleava entre dias pra não retornar 3 slots do mesmo dia."""
+    """Filtra + interleava entre dias pra não retornar 3 slots do mesmo dia.
+
+    `hora` ("HH:MM") prioriza slots próximos do horário pedido (±90min) e
+    ordena os candidatos do dia por distância da hora alvo. Se nada cair na
+    janela, devolve os mais próximos disponíveis daquele dia.
+    """
     days_sorted = sorted(k for k in by_day.keys() if "T" not in k and "-" in k)
+    target = _parse_hora(hora)
     candidates_by_day: dict[str, list[Slot]] = {}
     for dkey in days_sorted:
         block = by_day.get(dkey) or {}
@@ -111,6 +134,12 @@ def _filter_and_pick(
             if periodo and _period_of(d) != periodo:
                 continue
             kept.append(Slot(iso=s))
+        if target and kept:
+            th, tm = target
+            def _dist(slot: Slot) -> int:
+                d = dtparser.isoparse(slot.iso)
+                return abs(d.hour * 60 + d.minute - (th * 60 + tm))
+            kept.sort(key=_dist)
         if kept:
             candidates_by_day[dkey] = kept
 
@@ -134,6 +163,7 @@ async def propose_slots(
     *,
     dia: str | None = None,
     periodo: Period | None = None,
+    hora: str | None = None,
     limit: int = 3,
     janela_dias: int = 7,
 ) -> tuple[list[Slot], bool]:
@@ -157,17 +187,17 @@ async def propose_slots(
         },
         operation="calendar.free_slots",
     )
-    slots = _filter_and_pick(raw, dia=dia, periodo=periodo, limit=limit, now=now)
+    slots = _filter_and_pick(raw, dia=dia, periodo=periodo, hora=hora, limit=limit, now=now)
     fallback = False
     # Se filtro por preferência veio vazio, tenta sem filtro pra não deixar
     # o lead sem opção alguma.
-    if not slots and (dia or periodo):
-        log.info("calendar_slots_fallback_no_pref_match", dia=dia, periodo=periodo)
-        slots = _filter_and_pick(raw, dia=None, periodo=None, limit=limit, now=now)
+    if not slots and (dia or periodo or hora):
+        log.info("calendar_slots_fallback_no_pref_match", dia=dia, periodo=periodo, hora=hora)
+        slots = _filter_and_pick(raw, dia=None, periodo=None, hora=hora, limit=limit, now=now)
         fallback = True
     log.info(
         "calendar_slots_proposed",
-        dia=dia, periodo=periodo, returned=len(slots),
+        dia=dia, periodo=periodo, hora=hora, returned=len(slots),
         fallback=fallback,
         slots=[s.iso for s in slots],
     )

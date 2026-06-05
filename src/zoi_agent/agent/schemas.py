@@ -52,6 +52,7 @@ class Collected(BaseModel):
 class PreferenciaHorario(BaseModel):
     dia: str | None = None
     periodo: Literal["manha", "tarde", "noite"] | None = None
+    hora: str | None = None  # "HH:MM" quando lead dá horário explícito (ex: "10:00")
 
 
 class StateUpdate(BaseModel):

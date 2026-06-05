@@ -199,8 +199,12 @@ NÃO liste o mesmo tópico 2x. Liste vazio `[]` se o turno é só resposta de fu
 - `ai_identity_asked_count_delta=1` apenas se ESTE turno o lead questionou identidade IA.
 
 # Terminal reasons (somente se aplicável neste turno)
-- "qualificado_agendado": appointment criado (orquestrador costuma setar; só preencha
-  se o lead acabou de aceitar slot e você está certo).
+- "qualificado_agendado": 🚨 NÃO SETAR. Quem seta é o orquestrador, e SOMENTE
+  após `book_appointment` ter sucesso. Mesmo que o lead diga "pode ser amanhã
+  10:00", você DEIXA `terminal_reason=null`. O orquestrador propõe slots e
+  só promove a terminal quando o booking real for criado no calendário.
+  Se você setar essa terminal por conta própria, o lead vai sair do funil
+  sem agendamento no CRM (bug grave já visto em prod).
 - "qualificado_sem_agenda": OS 10 CAMPOS estão preenchidos NESTE TURNO E o lead
   recusou agendamento (ex: "não quero agendar agora", "não tenho data certa").
   Verifique que collected NÃO tem campos null (incl. cidade, forma_pagamento etc).
@@ -212,12 +216,21 @@ REGRA OBRIGATÓRIA: se `should_handoff=true`, então `terminal_reason` DEVE ser 
 
 # Slot escolhido pra agendamento
 - `chosen_slot_iso` SÓ é preenchido quando, no turno anterior, o agente propôs slots
-  específicos (visíveis no histórico) E o lead aceitou explicitamente um deles
-  (ex: "pode ser quinta 09:30", "o primeiro tá ok", "amanhã 10 horas serve").
+  específicos (visíveis no histórico como ISOs ou labels claros) E o lead aceitou
+  explicitamente UM DELES, citando uma opção que CASA EXATAMENTE com algum slot
+  proposto (ex: "pode ser quinta 09:30" quando 09:30 estava na lista).
 - Use exatamente o ISO8601 com offset (-03:00) que aparece no histórico/proposta.
+- 🚨 Se o lead disser horário (ex: "passo aí umas 10:00", "pode ser 14h", "amanhã 10")
+  mas esse horário NÃO bate com nenhum slot proposto OU nenhum slot foi proposto
+  ainda, `chosen_slot_iso=null`. Em vez disso, preencha `preferencia_horario`:
+    * `dia` se houver dica de dia ("amanhã", "quinta", "hoje" etc.).
+    * `periodo` derivado da hora (manhã <12, tarde 12-18, noite >18).
+    * `hora` = "HH:MM" (ex: "10:00", "14:30"). SEMPRE preencha quando o lead
+      citou horário explícito — isso permite o orquestrador propor slots
+      próximos do horário pedido.
 - Em qualquer outra situação: `chosen_slot_iso=null`.
 - Se o lead deu preferência VAGA (apenas "amanhã de manhã"), preencha
-  `preferencia_horario` em vez de chosen_slot_iso.
+  `preferencia_horario` (dia + periodo, hora=null).
 
 # ESCOLHA DE FOTO — `photo_target_external_id` (CRÍTICO)
 Esse campo SÓ É PREENCHIDO quando o turno atual tem `pedido_foto` em
