@@ -359,6 +359,38 @@ async def _dispatch_tools(
         except Exception as e:
             log.error("vehicle_details_failed", err=str(e))
 
+    # Tom do turno — pista pro responder calibrar o registro emocional.
+    # Não é regra dura; é hint pra evitar Patricia sempre no mesmo registro
+    # chapado. Derivado de sentiment + stage.
+    sentiment = getattr(state, "last_sentiment", "neutro") or "neutro"
+    if sentiment == "irritado":
+        tom = "empatico_calmo"
+    elif sentiment == "negativo":
+        tom = "empatico_acolhedor"
+    elif sentiment == "positivo":
+        tom = "entusiasmado_moderado"
+    elif state.stage in ("fechamento",):
+        tom = "objetivo_confiante"
+    else:
+        tom = "descontraido"
+    out["tom_turno"] = tom
+
+    # Acknowledgment hint — sinaliza ao responder que o lead acabou de
+    # revelar algo PESSOAL/EMOCIONAL no turno e que a 1ª bolha deve validar
+    # antes de avançar funil. Sem isso, Patricia ignora contexto humano.
+    ack: dict[str, Any] = {}
+    last_low = (last_message or "").lower()
+    motivo = (state.collected.motivo_compra_ou_troca or "").strip()
+    troca = state.collected.troca_completa
+    if motivo and motivo[:30].lower() in last_low:
+        ack["motivo"] = motivo
+    if troca and troca.quitado is False and ("financ" in last_low or "quitad" in last_low):
+        ack["situacao_troca"] = "troca não quitada / possivelmente financiada"
+    if state.collected.nome and state.collected.nome.lower() in last_low and len(last_low) < 30:
+        ack["acabou_de_dar_nome"] = state.collected.nome
+    if ack:
+        out["acknowledge_hint"] = ack
+
     return out
 
 
