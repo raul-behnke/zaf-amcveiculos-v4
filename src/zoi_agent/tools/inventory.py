@@ -128,8 +128,13 @@ async def _fetch_inventory() -> list[dict]:
         items = []
     # Normaliza schema heterogêneo (id->external_id, ano_modelo->ano, etc.)
     items = [_normalize_vehicle(x) for x in items if isinstance(x, dict)]
-    # Filtra inativos se status presente
-    items = [x for x in items if (x.get("status") or "ATIVO").upper() == "ATIVO"]
+    # Filtra inativos. GHL aceita variações: ATIVO (pt legado), ACTIVE (novo
+    # schema en), AVAILABLE, PUBLICADO. Trata todas como "ativo".
+    _active_statuses = {"ATIVO", "ATIVOS", "ACTIVE", "AVAILABLE", "PUBLICADO"}
+    items = [
+        x for x in items
+        if (x.get("status") or "ATIVO").upper() in _active_statuses
+    ]
     log.info("inventory_loaded", n=len(items))
     return items
 
