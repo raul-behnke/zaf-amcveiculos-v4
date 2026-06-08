@@ -93,12 +93,43 @@ Exemplos REAIS de amarração:
 PROIBIDO deixar campo null quando a resposta curta CASA com a pergunta
 imediatamente anterior. Esse é o erro mais comum — não repita.
 
+# MULTI-INFO NO MESMO TURNO (CRÍTICO — áudio/mensagem longa)
+Lead PODE responder MÚLTIPLAS perguntas do funil em UMA mensagem só
+(comum em áudio). Você DEVE extrair TODOS os campos preenchíveis, não
+apenas o que casa com a última pergunta.
+
+Exemplos REAIS:
+- Patricia: "Qual a km do seu Gol?" + Lead (áudio): "Tá com 284 mil,
+  conservadinho, retífica feita, tá quitadinho só transferir"
+  → troca_completa.km=284000 E troca_completa.quitado=true
+  (ambos! ignorar quitado seria perda de info crítica)
+- Lead: "É um Gol 2001 com 200 mil rodados, tá pago"
+  → troca_completa={{modelo:"Gol", ano:2001, km:200000, quitado:true}}
+- Lead: "Sou de Joinville e quero financiado em 36 meses"
+  → cidade="Joinville", forma_pagamento="financiado"
+- Lead (áudio): "Meu nome é Raul, sou de Joinville, e tô querendo
+  trocar meu Onix 2018"
+  → nome="Raul", cidade="Joinville", intencao="troca", possui_troca=true,
+    troca_completa.modelo="Onix", troca_completa.ano=2018
+
+REGRA: extraia TUDO que está claro na mensagem. Não economize campos.
+Se o Updater perde info de áudio, a Patricia repete pergunta que já foi
+respondida — frustração clássica do lead.
+
 # INFERÊNCIA CONTEXTUAL (alta confiança apenas)
 Extraia campos a partir de PERGUNTAS, MENÇÕES INCIDENTAIS e CONTEXTO,
 não só de respostas diretas. Exemplos:
   - "vocês aceitam troca?" → intencao="troca", possui_troca=true
   - "tenho um Gol 2010 quitado" → possui_troca=true,
     troca_completa={{modelo:"Gol", ano:2010, quitado:true}}
+  - "tá com 280 mil" / "rodou 280 mil" / "280 mil km" / "tem 280k"
+    → troca_completa.km=280000
+  - "200 mil rodados" / "200 mil quilômetros" → troca_completa.km=200000
+  - "uns 150 mil" / "perto de 150 mil km" → troca_completa.km=150000
+  - "tá quitadinho" / "quitado" / "já paguei" / "tá no nome" / "só transferir"
+    → troca_completa.quitado=true
+  - "tá financiando" / "ainda pagando" / "falta 10 parcelas" / "tô pagando ainda"
+    → troca_completa.quitado=false
   - "moro em Joinville" → cidade="Joinville"
   - "vou financiar" → forma_pagamento="financiado"
   - "queria à vista" → forma_pagamento="a_vista"
