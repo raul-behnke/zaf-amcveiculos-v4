@@ -103,7 +103,7 @@ def build_consolidated_note(
         f"Pagamento: {_or_dash(c.forma_pagamento)}",
         "",
         f"Agendamento: {_format_appointment(state)}",
-        f"Handoff: {_or_dash(handoff_reason) if terminal_reason.startswith('handoff') else '-'}",
+        f"Motivo encerramento: {_or_dash(handoff_reason)}",
         "",
         f"Observações: {_or_dash(observacoes)}",
     ]

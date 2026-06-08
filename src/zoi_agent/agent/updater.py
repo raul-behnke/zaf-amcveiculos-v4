@@ -239,6 +239,13 @@ NÃO liste o mesmo tópico 2x. Liste vazio `[]` se o turno é só resposta de fu
 - "qualificado_sem_agenda": OS 10 CAMPOS estão preenchidos NESTE TURNO E o lead
   recusou agendamento (ex: "não quero agendar agora", "não tenho data certa").
   Verifique que collected NÃO tem campos null (incl. cidade, forma_pagamento etc).
+  🚨 OBRIGATÓRIO: quando setar essa terminal, PREENCHA `handoff_reason` com o
+  MOTIVO da recusa em 1 frase curta. Exemplos:
+    - "lead recusou agendar agora, prefere pensar"
+    - "lead pediu prazo pra decidir antes de marcar"
+    - "lead sem disponibilidade definida ainda"
+    - "lead disse 'depois eu vejo' / 'vou pensar'"
+  Essa frase vai pra NOTA do CRM — é o resumo que o consultor vai ler.
 - "handoff_solicitado": pedido humano confirmado / opt_out / irritação.
 - "handoff_erro": falha técnica (não decidir aqui — orquestrador seta).
 
