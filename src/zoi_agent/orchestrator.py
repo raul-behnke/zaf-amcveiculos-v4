@@ -392,6 +392,25 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
         last_message=last_message,
     )
 
+    # ESCALONAMENTO AUTOMÁTICO: lead pediu algo fora-escopo (ligação/simulação/
+    # negociação/etc) em algum turno anterior, ficou pendente porque faltavam
+    # campos. Quando o funil completar, escalona automaticamente.
+    if (
+        new_state.escalacao_pendente_motivo
+        and not update.terminal_reason
+        and not new_state.terminal_reason
+    ):
+        from zoi_agent.agent.schemas import compute_missing
+        remaining = compute_missing(new_state.collected)
+        if not remaining:
+            update.terminal_reason = "handoff_solicitado"
+            update.handoff_reason = new_state.escalacao_pendente_motivo
+            log.info(
+                "auto_escalate_after_funnel",
+                contact_id=contact_id,
+                motivo=new_state.escalacao_pendente_motivo,
+            )
+
     # GUARD: strip premature qualificado_agendado terminal
     if (
         update.terminal_reason == "qualificado_agendado"

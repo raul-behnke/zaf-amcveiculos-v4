@@ -254,6 +254,34 @@ NÃO liste o mesmo tópico 2x. Liste vazio `[]` se o turno é só resposta de fu
     - "lead sem disponibilidade definida ainda"
     - "lead disse 'depois eu vejo' / 'vou pensar'"
   Essa frase vai pra NOTA do CRM — é o resumo que o consultor vai ler.
+
+# 📞 ESCALONAMENTO FORA-ESCOPO — `escalacao_pendente_motivo_set`
+Quando o lead pede algo que o agente IA NÃO pode resolver no WhatsApp:
+  - LIGAÇÃO telefônica
+  - SIMULAÇÃO de financiamento ('quanto fica financiado?', 'simula pra mim')
+  - NEGOCIAÇÃO de preço ('aceita 50k à vista?', 'tem como abaixar?')
+  - AVALIAÇÃO da troca em R$ ('quanto vocês pagam no meu Gol?')
+  - Aprovação de crédito específica
+Você DEVE:
+  1. Setar `intent=pedido_humano` (se foi pedido CLARO).
+  2. Preencher `escalacao_pendente_motivo_set` com 1 frase curta descrevendo
+     o pedido fora-escopo. Ex: 'lead pediu ligação telefônica', 'lead pediu
+     simulação de financiamento', 'lead quer negociar preço do veículo',
+     'lead pediu avaliação da troca'.
+  3. Olhar `missing` que vai resultar deste turno:
+     * Se `missing == []` (funil COMPLETO neste turno):
+       → terminal_reason='handoff_solicitado'
+       → handoff_reason = mesmo motivo que pôs em escalacao_pendente_motivo_set
+     * Se `missing != []` (faltam campos do funil):
+       → terminal_reason=null (NÃO escalona ainda)
+       → Patricia vai continuar coletando o funil, mas vai EXPLICITAR ao
+         lead que assim que terminar, passa o contato pro consultor pra
+         {{motivo}}. Orchestrator escalona automaticamente quando funil
+         completar nos próximos turnos.
+  4. Se `state.escalacao_pendente_motivo` já estava setado em turno anterior,
+     NÃO precisa re-setar `escalacao_pendente_motivo_set` (é idempotente).
+     Apenas continue qualificando — orchestrator detecta funil completo
+     e escalona sozinho.
 - "handoff_solicitado": pedido humano confirmado / opt_out / irritação.
 - "handoff_erro": falha técnica (não decidir aqui — orquestrador seta).
 
@@ -532,6 +560,12 @@ def merge_into_state(state: SessionState, update: StateUpdate) -> SessionState:
 
     new.humano_solicitado_count += max(0, min(1, update.humano_solicitado_count_delta))
     new.ai_identity_asked_count += max(0, min(1, update.ai_identity_asked_count_delta))
+
+    # Escalonamento pendente: lead pediu algo fora-escopo (ligação, simulação,
+    # negociação). Salva no state pra orchestrator escalonar quando funil
+    # completar. NÃO sobrescreve se já tem (idempotente — primeiro pedido fica).
+    if update.escalacao_pendente_motivo_set and not new.escalacao_pendente_motivo:
+        new.escalacao_pendente_motivo = update.escalacao_pendente_motivo_set
 
     if update.terminal_reason:
         new.terminal_reason = update.terminal_reason

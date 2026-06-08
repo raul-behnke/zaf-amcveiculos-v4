@@ -94,6 +94,19 @@ class StateUpdate(BaseModel):
         default=0,
         description="Incremento (0 ou 1) — usado pra atualizar contador na sessão",
     )
+    escalacao_pendente_motivo_set: str | None = Field(
+        default=None,
+        description=(
+            "Motivo de escalonamento pendente quando o lead pediu algo fora "
+            "do escopo do agente (ligação, simulação de financiamento, "
+            "negociação de preço, avaliação de troca em R$). Preencha SOMENTE "
+            "no turno em que o pedido fora-escopo apareceu. Quando o funil "
+            "completar nos próximos turnos, o orchestrator usa esse motivo "
+            "pra escalonar com handoff_solicitado automaticamente. Ex: "
+            "'lead pediu ligação telefônica', 'lead pediu simulação de "
+            "financiamento', 'lead quer negociar preço da Montana'."
+        ),
+    )
     ai_identity_asked_count_delta: int = Field(
         default=0, description="Incremento (0 ou 1)"
     )
@@ -132,6 +145,7 @@ class SessionState(BaseModel):
     last_intent: Intent = "qualificar"
     terminal_reason: str | None = None
     appointment: dict | None = None
+    escalacao_pendente_motivo: str | None = None  # Lead pediu algo fora-escopo (ligação, simulação, negociação) — escalonar quando funil completar
     created_at: str | None = None
     updated_at: str | None = None
 
