@@ -8,7 +8,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
 # --- EstoqueExpert output ---------------------------------------------------
 
 
@@ -79,6 +78,15 @@ class InventoryDecision(BaseModel):
             "Patricia pode reescrever, mas mantém o sentido."
         ),
     )
+    enviar_fotos_de: str | None = Field(
+        default=None,
+        description=(
+            "external_id do veículo cujas fotos devem ser enviadas neste turno. "
+            "Use APENAS quando o lead pediu foto OU você decidiu que mostrar "
+            "foto vai converter melhor. O orquestrador faz o envio (paralelo, "
+            "sob shield) — você não precisa chamar nenhuma tool de envio."
+        ),
+    )
     motivo_geral: str = Field(
         description=(
             "Raciocínio interno do EstoqueExpert (pra logs/debug). NÃO vai pro lead."
@@ -94,6 +102,11 @@ class BubbleSequence(BaseModel):
 
     Orchestrator monta bolhas finais:
         [abertura?, cards_renderizados_pelo_template?, fechamento]
+
+    Quando você (Patricia) delegou ao EstoqueExpert neste turno, COPIE a
+    `InventoryDecision` retornada por ele no campo `inventory_decision` deste
+    output — o orquestrador precisa dela pra renderizar cards e fazer
+    tracking de vehicles_shown. Quando não delegou, deixe `inventory_decision=None`.
     """
 
     abertura: str | None = Field(
@@ -108,5 +121,13 @@ class BubbleSequence(BaseModel):
             "Bolha final OBRIGATÓRIA. Geralmente é a pergunta de funil "
             "(NextQuestion.canonical_text vestida de persona) OU pergunta de foco "
             "OU pergunta de refinamento (quando InventoryDecision.action=perguntar_refinamento)."
+        ),
+    )
+    inventory_decision: InventoryDecision | None = Field(
+        default=None,
+        description=(
+            "Decisão do EstoqueExpert quando você delegou neste turno. "
+            "COPIE INTEGRALMENTE a InventoryDecision que ele retornou. "
+            "None quando não houve delegação (lead em qualificação pura / FAQ / agenda)."
         ),
     )

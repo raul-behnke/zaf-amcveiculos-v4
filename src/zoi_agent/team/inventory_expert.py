@@ -22,7 +22,6 @@ from zoi_agent.config import settings
 from zoi_agent.logging import get_logger
 from zoi_agent.team.schemas import InventoryDecision
 from zoi_agent.tools.inventory import get_vehicle_details, load_inventory
-from zoi_agent.tools.photos import _find_by_external_id, _payload_for_vehicle
 
 log = get_logger(__name__)
 
@@ -99,37 +98,6 @@ async def puxar_ficha_veiculo(external_id: str) -> dict[str, Any]:
     return d
 
 
-@tool
-async def preparar_fotos_veiculo(external_id: str) -> dict[str, Any]:
-    """Prepara payload de fotos pra envio (até as 4 primeiras imagens).
-
-    Use APENAS quando o lead pediu foto explicitamente OU quando você decidiu
-    que mostrar foto vai converter melhor (ex: lead curioso visualmente).
-    O envio em si fica com o orchestrator (paralelo + shield).
-
-    Args:
-        external_id: ID do veículo a fotografar.
-
-    Returns:
-        Dict {available, vehicle, images[], single_image_only, will_send_count}.
-        Se available=False ou will_send_count=0, NÃO há fotos pra enviar.
-    """
-    inv = await load_inventory()
-    if not inv:
-        return {
-            "available": False, "vehicle": None, "images": [],
-            "single_image_only": False, "will_send_count": 0,
-        }
-    v = _find_by_external_id(str(external_id), inv)
-    if not v:
-        log.warning("preparar_fotos_not_found", external_id=external_id)
-        return {
-            "available": False, "vehicle": None, "images": [],
-            "single_image_only": False, "will_send_count": 0,
-        }
-    return _payload_for_vehicle(v)
-
-
 # --- Agent builder ----------------------------------------------------------
 
 
@@ -194,6 +162,15 @@ _INSTRUCTIONS = [
     "Use pra passar pra Patricia o ÂNGULO de venda baseado na história do "
     "lead. Ex: 'lead falou em fretes — posicione por robustez e km baixo'.",
     "",
+    "## FOTOS (`enviar_fotos_de`)",
+    "- Preencha com o external_id do veículo SOMENTE quando o lead pediu "
+    "foto explicitamente ('manda foto', 'me mostra', 'tem foto?') OU "
+    "quando você decidiu que mostrar foto vai converter melhor.",
+    "- O orquestrador envia as fotos em paralelo, sob shield — você não "
+    "precisa chamar nenhuma tool de envio.",
+    "- NÃO envie foto do mesmo veículo se ele já recebeu foto nesta "
+    "conversa (use vehicles_shown como pista).",
+    "",
     "## texto_sugerido_apresentacao (opcional, raro)",
     "Use SOMENTE quando você tem uma frase de abertura muito boa em mente. "
     "Patricia pode reescrever. Em dúvida, deixe None.",
@@ -226,7 +203,7 @@ async def build_inventory_expert() -> Agent:
         role="Decide quais veículos apresentar dado o contexto da conversa.",
         instructions=_INSTRUCTIONS,
         additional_context=inventory_context,
-        tools=[puxar_ficha_veiculo, preparar_fotos_veiculo],
+        tools=[puxar_ficha_veiculo],
         output_schema=InventoryDecision,
         markdown=False,
         telemetry=False,
