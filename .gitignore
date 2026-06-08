@@ -21,3 +21,15 @@ payloads/
 .env.prod
 deploy/.env.prod
 index-form.html
+
+# Working artifacts (research / analysis dumps — não versionar)
+ANALISE_CONVERSAS.md
+PROMPT_GERENTE_COMERCIAL.md
+QUALIFICACAO_E_COMPORTAMENTO.md
+RECONSTRUCAO_CONVERSAS.md
+RESUMO_UMA_FRASE.md
+conversations_dump.md
+scripts/agc_analyze.py
+scripts/agc_oneliner.py
+scripts/agc_rewrite.py
+scripts/fetch_conversations.py
