@@ -33,7 +33,10 @@ async def build_sdr_team() -> Team:
 
     return Team(
         name="SDR_AMC_Team",
-        model=OpenAIChat(id=settings.openai_model_patricia),
+        model=OpenAIChat(
+            id=settings.openai_model_patricia,
+            api_key=settings.openai_api_key,
+        ),
         mode=TeamMode.coordinate,
         members=[inventory_expert],
         description=(

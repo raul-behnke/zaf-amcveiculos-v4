@@ -198,7 +198,10 @@ async def build_inventory_expert() -> Agent:
 
     return Agent(
         name="EstoqueExpert",
-        model=OpenAIChat(id=settings.openai_model_inventory_expert),
+        model=OpenAIChat(
+            id=settings.openai_model_inventory_expert,
+            api_key=settings.openai_api_key,
+        ),
         description="Especialista no estoque da AMC Veículos (Joinville/SC).",
         role="Decide quais veículos apresentar dado o contexto da conversa.",
         instructions=_INSTRUCTIONS,
