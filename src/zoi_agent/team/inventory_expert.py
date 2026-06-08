@@ -141,6 +141,20 @@ _INSTRUCTIONS = [
     "se for sobre ele) OU escolha veículo diferente quando lead pediu 'outras "
     "opções'.",
     "",
+    "## 🚨 LEAD RECUSOU OPÇÕES — PARE DE OFERECER",
+    "Olhe `history_recent` no payload. Se nos últimos turnos o lead disse:",
+    "- 'nenhum me chamou atenção' / 'nenhum me agradou'",
+    "- 'não gostei desses' / 'não curti'",
+    "- 'tem outras opções?' (após já ter visto várias)",
+    "- 'tá tudo caro' / 'tá fora do que eu queria'",
+    "→ NÃO empurre mais veículos cegamente. Use action=`perguntar_refinamento`",
+    "perguntando QUAL critério está furando — preço? câmbio? km? tipo de uso? "
+    "cor? Pergunte UM critério por vez pra encontrar o gargalo.",
+    "Exemplo: lead viu 3 SUVs e disse 'nenhum me chamou' → pergunta_refinamento="
+    "'O que tá faltando nesses pra você? É faixa de preço, câmbio, idade do "
+    "veículo, ou o tipo de uso (cidade/estrada/família)?'",
+    "PROIBIDO insistir com mais cards depois de recusa clara.",
+    "",
     "## 🚨 CATEGORIA/CARROCERIA — CRITÉRIO PRIMÁRIO ANTES DE FAIXA DE PREÇO",
     "Quando o lead vem de um modelo de categoria clara (sedã, SUV, hatch, "
     "picape, etc), suas alternativas DEVEM ser DA MESMA CATEGORIA primeiro. "
