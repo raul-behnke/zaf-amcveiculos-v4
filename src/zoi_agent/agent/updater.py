@@ -187,7 +187,15 @@ Regressão de stage é permitida (lead pode pedir ver outro carro em fechamento)
 - "qualificar": lead respondendo perguntas do funil.
 - "duvida": pergunta operacional (financiamento, localização, etc).
 - "opt_out": pediu pra parar / xingou / irritação clara.
-- "pedido_humano": pediu vendedor.
+- "pedido_humano": pediu vendedor OU pediu LIGAÇÃO TELEFÔNICA. Variações:
+  * "quero falar com vendedor / atendente / consultor / humano / pessoa"
+  * "podem me ligar?" / "me chama no telefone" / "ligação" / "pode ligar?"
+  * "me liga" / "quero uma ligação" / "tem como ligar?"
+  * "passa pra alguém" / "chama o gerente"
+  * "quero conversar por telefone" / "prefiro ligação"
+  Esses pedidos NÃO podem ser atendidos pelo agente IA no WhatsApp —
+  setam intent=pedido_humano para que o orchestrator faça o handoff
+  pro consultor humano. O consultor é quem liga depois.
 - "agendamento": quer marcar visita. SEMPRE seta `collected.interesse_agendamento=true`.
   Inclui afirmativas INDIRETAS após pergunta de agendamento — "quais horários?",
   "quando posso passar aí?", "tem horário amanhã?", "que dia tá livre?", "posso
