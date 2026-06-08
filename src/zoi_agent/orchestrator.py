@@ -32,6 +32,7 @@ from zoi_agent.logging import get_logger
 from zoi_agent.metrics import TURNS_TOTAL
 from zoi_agent.team.runner import run_team_turn
 from zoi_agent.tools.calendar import book_appointment, find_exact_slot, propose_slots
+from zoi_agent.tools.faq import get_faq_raw
 from zoi_agent.tools.handoff import encaminhar_para_vendedor
 from zoi_agent.tools.inventory import get_vehicle_details
 from zoi_agent.tools.photos import build_photo_payload_by_id
@@ -186,6 +187,19 @@ async def _dispatch_deterministic(
                 out["vehicle_in_focus"] = details
         except Exception as e:
             log.error("vehicle_details_failed", err=str(e))
+
+    # FAQ — dispatch determinístico quando lead tem dúvida operacional.
+    # Mais confiável que esperar Patricia chamar tool consultar_faq() —
+    # injeta o YAML direto no payload pra ela usar como fonte de verdade.
+    if (
+        update_intent == "duvida"
+        or "duvida_operacional" in update_topics
+    ):
+        try:
+            out["faq_yaml"] = await get_faq_raw()
+        except Exception as e:
+            log.error("faq_fetch_failed", err=str(e))
+            out["faq_yaml"] = ""
 
     # Tom do turno
     sentiment = getattr(state, "last_sentiment", "neutro") or "neutro"
@@ -440,6 +454,7 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
             slots=dispatch.get("slots"),
             vehicle_in_focus=dispatch.get("vehicle_in_focus"),
             booking_result=booking_result,
+            faq_yaml=dispatch.get("faq_yaml"),
         )
     except Exception as e:
         log.error("team_failed_terminal", contact_id=contact_id, err=str(e))

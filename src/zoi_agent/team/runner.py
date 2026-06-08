@@ -130,6 +130,7 @@ def _base_payload(
     slots: list[dict] | None,
     vehicle_in_focus: dict | None,
     booking_result: dict | None,
+    faq_yaml: str | None = None,
 ) -> dict[str, Any]:
     return {
         "last_message": last_message,
@@ -170,6 +171,7 @@ def _base_payload(
         "slots": slots or [],
         "vehicle_in_focus": vehicle_in_focus,
         "booking_result": booking_result,
+        "faq_yaml": faq_yaml,
         "history_recent": _serialize_history(history, limit=20),
     }
 
@@ -401,6 +403,7 @@ async def run_team_turn(
     slots: list[dict] | None = None,
     vehicle_in_focus: dict | None = None,
     booking_result: dict | None = None,
+    faq_yaml: str | None = None,
 ) -> dict[str, Any]:
     """Executa o turno com 2 Agno Agents sequenciais (quando há sinal de estoque).
 
@@ -431,6 +434,7 @@ async def run_team_turn(
         slots=slots,
         vehicle_in_focus=vehicle_in_focus,
         booking_result=booking_result,
+        faq_yaml=faq_yaml,
     )
 
     # 1) EstoqueExpert (quando há sinal) — com retry + validação blindada
