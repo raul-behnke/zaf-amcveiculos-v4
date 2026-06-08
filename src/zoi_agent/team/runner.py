@@ -15,6 +15,7 @@ Quando NÃO há sinal de estoque: pula passo 2, Patricia roda direto.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -37,6 +38,9 @@ from zoi_agent.team.schemas import (
 from zoi_agent.tools.inventory import get_vehicle_details, load_inventory
 
 log = get_logger(__name__)
+
+# Timeouts duros pra detectar trava silenciosa do Agno arun()
+_ARUN_TIMEOUT_S = 45.0
 
 
 # --- Detecção de sinal de estoque ------------------------------------------
@@ -266,7 +270,9 @@ async def _call_inventory_expert_with_retry(
         try:
             expert = await build_inventory_expert()
             expert_input = json.dumps(payload, ensure_ascii=False, default=str)
-            expert_result = await expert.arun(input=expert_input)
+            expert_result = await asyncio.wait_for(
+                expert.arun(input=expert_input), timeout=_ARUN_TIMEOUT_S
+            )
             expert_content = getattr(expert_result, "content", None)
 
             if not isinstance(expert_content, InventoryDecision):
@@ -471,7 +477,13 @@ async def run_team_turn(
 
     patricia = build_patricia_agent()
     patricia_input = json.dumps(patricia_payload, ensure_ascii=False, default=str)
-    result = await patricia.arun(input=patricia_input)
+    try:
+        result = await asyncio.wait_for(
+            patricia.arun(input=patricia_input), timeout=_ARUN_TIMEOUT_S
+        )
+    except asyncio.TimeoutError:
+        log.error("patricia_arun_timeout", timeout_s=_ARUN_TIMEOUT_S)
+        raise RuntimeError(f"Patricia.arun timeout >{_ARUN_TIMEOUT_S}s") from None
     content = getattr(result, "content", None)
 
     if not isinstance(content, BubbleSequence):
