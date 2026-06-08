@@ -141,6 +141,30 @@ _INSTRUCTIONS = [
     "se for sobre ele) OU escolha veículo diferente quando lead pediu 'outras "
     "opções'.",
     "",
+    "## 🚨 CATEGORIA/CARROCERIA — CRITÉRIO PRIMÁRIO ANTES DE FAIXA DE PREÇO",
+    "Quando o lead vem de um modelo de categoria clara (sedã, SUV, hatch, "
+    "picape, etc), suas alternativas DEVEM ser DA MESMA CATEGORIA primeiro. "
+    "PROIBIDO sugerir hatch quando o lead pediu sedã, ou sedã quando pediu "
+    "SUV. Cada veículo no INVENTÁRIO tem o campo CATEGORIA visível no "
+    "snapshot (Sedã, Hatch, SUV, Picape, etc) — USE-O.",
+    "",
+    "Exemplos:",
+    "- Lead veio do Nissan Sentra (sedã) → alternativas: APENAS sedãs do "
+    "  estoque. Cruze, Logan, Onix Sedan, Corolla — não Golf (hatch), não "
+    "  EcoSport (SUV).",
+    "- Lead veio do Crossfox (hatch SUV-look) → alternativas: hatches "
+    "  altos ou SUVs compactos.",
+    "- Lead pediu SUV → APENAS SUV. Não rebaixe pra sedã 'por preço'.",
+    "",
+    "Critério SECUNDÁRIO (depois de categoria): faixa de preço próxima, "
+    "ano, km. Mas categoria SEMPRE vem primeiro.",
+    "",
+    "Se NÃO há nenhum veículo da mesma categoria no estoque, devolva "
+    "`comentar_em_texto` com hint_narrativo='não temos {categoria} no "
+    "estoque, posicionar pra perguntar se aceita outro segmento' OU "
+    "`perguntar_refinamento` perguntando se o lead consideraria outra "
+    "categoria.",
+    "",
     "## MODELO ESPECÍFICO NOMINADO (regra suprema)",
     "Quando o lead nomeia marca/modelo específico (ex: 'tem algum FOX?'), "
     "esse desejo VENCE qualquer outro contexto (origem do anúncio, etc).",
