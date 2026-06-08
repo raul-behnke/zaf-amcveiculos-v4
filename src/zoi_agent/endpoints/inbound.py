@@ -89,6 +89,38 @@ def parse_tags_csv(value: Any) -> set[str]:
     return set()
 
 
+# Tipos do GHL que NÃO são mensagem real do usuário/agente (são activity events
+# como "Opportunity created", mudança de stage, criação de oportunidade, etc).
+# Esses eventos aparecem com direction=outbound e quebravam a lógica de burst
+# aggregation (faziam parecer que havia uma resposta nova da Patricia entre o
+# inbound do lead e o webhook chegando).
+_ACTIVITY_TYPE_STRINGS: frozenset[str] = frozenset({
+    "TYPE_ACTIVITY",
+    "TYPE_ACTIVITY_OPPORTUNITY",
+    "TYPE_ACTIVITY_CONTACT",
+    "TYPE_ACTIVITY_INVOICE",
+    "TYPE_ACTIVITY_PAYMENT",
+    "TYPE_ACTIVITY_APPOINTMENT",
+    "TYPE_ACTIVITY_ASSIGNED",
+    "TYPE_ACTIVITY_USER",
+})
+_ACTIVITY_TYPE_NUMBERS: frozenset[int] = frozenset(range(25, 60))
+
+
+def _is_real_message(m: dict) -> bool:
+    """True se a mensagem é texto/áudio/foto real (não evento de activity)."""
+    t = m.get("type")
+    if isinstance(t, str):
+        if t.upper().startswith("TYPE_ACTIVITY"):
+            return False
+        if t in _ACTIVITY_TYPE_STRINGS:
+            return False
+    elif isinstance(t, int):
+        if t in _ACTIVITY_TYPE_NUMBERS:
+            return False
+    return True
+
+
 def extract_latest_inbound(messages: list[dict]) -> dict | None:
     """Retorna o último inbound. Lista pode vir ordenada DESC ou ASC; varremos."""
     inbound = [m for m in (messages or []) if m.get("direction") == "inbound"]
@@ -107,7 +139,13 @@ def extract_inbound_burst(messages: list[dict]) -> list[dict]:
     (ex: "280km" + "Ta quitadinho" + "inteiro" = uma resposta única ao agent).
     Se nunca houve outbound, retorna todas as inbounds em ordem cronológica.
     """
-    msgs = sorted(messages or [], key=lambda m: m.get("dateAdded") or "")
+    # Filtra eventos de activity (opportunity created, stage change, etc) —
+    # eles aparecem com direction=outbound mas não são mensagens reais e
+    # quebravam a detecção de "última resposta da Patricia".
+    msgs = sorted(
+        (m for m in (messages or []) if _is_real_message(m)),
+        key=lambda m: m.get("dateAdded") or "",
+    )
     last_out_idx = -1
     for i, m in enumerate(msgs):
         if m.get("direction") == "outbound":
@@ -190,7 +228,9 @@ async def inbound(request: Request) -> dict:
 
     # Confirma que essa rajada inbound é a realmente mais recente da conversa
     # (não há outbound posterior). Evita re-processar quando webhook é eco antigo.
-    latest_any = max(messages, key=lambda m: m.get("dateAdded") or "", default=None)
+    # Filtra activity events (opportunity created etc) — eles não contam.
+    real_messages = [m for m in messages if _is_real_message(m)]
+    latest_any = max(real_messages, key=lambda m: m.get("dateAdded") or "", default=None)
     if latest_any and latest_any.get("direction") == "outbound" and (
         (latest_any.get("dateAdded") or "") > (latest.get("dateAdded") or "")
     ):
