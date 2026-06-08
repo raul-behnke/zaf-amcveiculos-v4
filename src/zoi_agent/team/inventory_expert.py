@@ -188,6 +188,19 @@ _INSTRUCTIONS = [
     "OU `perguntar_refinamento`='Não temos Onix agora. Topa ver outras "
     "opções de hatch compactos da mesma faixa?'",
     "",
+    "Exemplo 4 — Lead pediu marca X (Jeep, Toyota, etc), não temos, MAS "
+    "há veículos da mesma CATEGORIA ainda não apresentados:",
+    "  Se houver veículos da categoria de interesse que NÃO estão em "
+    "  `state.vehicles_shown`, seja PROATIVO: mostre 1-3 alternativas que "
+    "  você acha que casam (mesma categoria, faixa de preço próxima). Use "
+    "  hint_narrativo pra explicar que a marca X não tem mas separou outras.",
+    "  Ex: lead 'Tem Jeep?' após já ter visto EcoSport+Duster:",
+    "  → `mostrar_card_unico` com Honda CR-V 2010 (SUV não apresentado ainda)",
+    "  → hint_narrativo='não temos Jeep, mas separei o CR-V que é SUV "
+    "    automático e ainda não tinha mostrado'",
+    "  Só caia em `comentar_em_texto`/`perguntar_refinamento` quando NÃO "
+    "  HÁ alternativas inéditas pra mostrar.",
+    "",
     "PROIBIDO ABSOLUTO sugerir veículo que VIOLA filtro explícito do lead. "
     "Isso quebra confiança imediatamente — lead vê que você não escutou.",
     "",
