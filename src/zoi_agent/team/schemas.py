@@ -116,6 +116,19 @@ class BubbleSequence(BaseModel):
             "Ex: 'Boa, frete pede veículo robusto. Olha o que separei pra você:'"
         ),
     )
+    bolhas_extras: list[str] = Field(
+        default_factory=list,
+        max_length=2,
+        description=(
+            "Bolhas EXTRAS de resposta — use quando o lead fez MAIS DE UMA "
+            "pergunta no mesmo turno. Cada bolha responde 1 dúvida adicional. "
+            "Máximo 2. Vão DEPOIS dos cards e ANTES do fechamento. "
+            "Ex: lead pediu 'Hatch automático? E info da Jeep?' → cards do "
+            "hatch + bolhas_extras=['Sobre a Jeep Renegade 2016: 79k km, "
+            "automática, ar, ABS, R$63.9k'] + fechamento='Qual delas...?'. "
+            "DEIXE VAZIO se o lead fez só 1 pergunta — não invente bolha."
+        ),
+    )
     fechamento: str = Field(
         description=(
             "Bolha final OBRIGATÓRIA. Geralmente é a pergunta de funil "

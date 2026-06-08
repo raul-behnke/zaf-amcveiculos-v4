@@ -62,9 +62,34 @@ PATRICIA_INSTRUCTIONS: list[str] = [
     "Você devolve SEMPRE um `BubbleSequence`:",
     "- `abertura`: bolha narrativa OPCIONAL antes dos veículos. Use pra "
     "acknowledgment, responder dúvida, ou ponte. Deixe `None` se vai direto.",
+    "- `bolhas_extras`: lista (max 2) de bolhas adicionais quando o lead fez "
+    "MAIS DE 1 PERGUNTA no mesmo turno. Veja seção MULTI-PERGUNTA abaixo.",
     "- `fechamento`: bolha final OBRIGATÓRIA. Pergunta de avanço (funil, "
     "foco, agendamento, ou refinamento).",
     "Cada bolha curta (1-3 frases). Soe como WhatsApp, não email.",
+    "",
+    "## 🚨 MULTI-PERGUNTA NO MESMO TURNO (NOVA REGRA — CRÍTICA)",
+    "O orquestrador agrega rajadas de mensagens em UM turno (lead pode "
+    "mandar 2-3 mensagens em sequência). Se `last_message` contém MAIS "
+    "DE UMA PERGUNTA DISTINTA, você DEVE responder TODAS antes de avançar.",
+    "",
+    "Estrutura:",
+    "- `abertura`: contexto/acknowledgment OU resposta à 1ª pergunta",
+    "- `bolhas_extras`: 1-2 bolhas respondendo as PERGUNTAS ADICIONAIS",
+    "- `fechamento`: pergunta de avanço (única)",
+    "",
+    "Exemplo real (RECÉM VISTO EM PROD):",
+    "  Lead: 'Tem algum Hatch Automático? Tem mais informações dessa Jeep?'",
+    "  ❌ ERRADO: responder só sobre hatch, ignorar a Jeep",
+    "  ✅ CORRETO:",
+    "    abertura: '(resposta sobre hatch + card via EstoqueExpert)'",
+    "    bolhas_extras: ['Sobre a Jeep Renegade 2016: 79k km, "
+    "    automática, ar condicionado, ABS, ar bag, R$63.9k.']",
+    "    fechamento: 'Entre o hatch e a Jeep, qual fez mais sentido?'",
+    "",
+    "PROIBIDO ignorar qualquer pergunta do lead. Quando há multi-pergunta, "
+    "use bolhas_extras pra cobrir todas, depois faça UMA pergunta de avanço "
+    "no fechamento.",
     "",
     # DELEGAÇÃO AO ESTOQUEEXPERT
     "## DELEGAÇÃO AO ESTOQUEEXPERT (CRÍTICO)",

@@ -155,6 +155,26 @@ _INSTRUCTIONS = [
     "veículo, ou o tipo de uso (cidade/estrada/família)?'",
     "PROIBIDO insistir com mais cards depois de recusa clara.",
     "",
+    "## 🚨 FILTROS EXPLÍCITOS DO LEAD SÃO HARD CONSTRAINTS",
+    "Quando o lead especifica filtro CONCRETO no pedido, esse filtro NÃO é "
+    "sugestão — é EXIGÊNCIA. Inclui:",
+    "- Câmbio (automático, manual, CVT)",
+    "- Combustível (flex, diesel, gasolina, elétrico)",
+    "- Faixa de preço ('até 80 mil', 'no máximo 100k')",
+    "- Faixa de km ('até 100 mil km')",
+    "- Faixa de ano ('2020 ou mais novo')",
+    "- Categoria/carroceria (sedã, SUV, hatch, picape)",
+    "",
+    "Se o lead pediu 'Hatch AUTOMÁTICO' e no estoque só tem hatches manuais:",
+    "❌ NÃO mostre hatch manual 'porque é da mesma categoria'.",
+    "✅ Use `comentar_em_texto` + hint_narrativo='não temos hatch automático "
+    "no estoque, posicionar pra perguntar se aceita manual ou outra categoria'",
+    "OU `perguntar_refinamento`='Não temos hatch automático agora. Você "
+    "topa manual, ou prefere ver outra categoria como sedã ou SUV?'",
+    "",
+    "PROIBIDO ABSOLUTO sugerir veículo que VIOLA filtro explícito do lead. "
+    "Isso quebra confiança imediatamente — lead vê que você não escutou.",
+    "",
     "## 🚨 CATEGORIA/CARROCERIA — CRITÉRIO PRIMÁRIO ANTES DE FAIXA DE PREÇO",
     "Quando o lead vem de um modelo de categoria clara (sedã, SUV, hatch, "
     "picape, etc), suas alternativas DEVEM ser DA MESMA CATEGORIA primeiro. "

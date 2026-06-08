@@ -500,6 +500,9 @@ async def run_team_turn(
     if seq.abertura:
         bubbles.append(seq.abertura)
     bubbles.extend(cards_bolhas)
+    for extra in (seq.bolhas_extras or [])[:2]:
+        if extra and extra.strip():
+            bubbles.append(extra.strip())
     bubbles.append(seq.fechamento)
 
     return {
