@@ -8,8 +8,10 @@ class Settings(BaseSettings):
     # OpenAI
     openai_api_key: str
     openai_model_updater: str = "gpt-4o"
-    openai_model_responder: str = "gpt-4o"
-    openai_model_inventory_extractor: str = "gpt-4o-mini"
+    openai_model_responder: str = "gpt-4o"  # legacy — substituído por Patricia (Team leader)
+    openai_model_patricia: str = "gpt-4o"  # Team leader (Agno)
+    openai_model_inventory_expert: str = "gpt-4o"  # Team member especialista em estoque (Agno)
+    openai_model_inventory_extractor: str = "gpt-4o-mini"  # legacy — substituído pelo EstoqueExpert
     openai_model_whisper: str = "whisper-1"
 
     # GHL
