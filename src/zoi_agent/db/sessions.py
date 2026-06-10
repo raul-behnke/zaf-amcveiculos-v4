@@ -1,9 +1,6 @@
 """Repo de session_state (JSONB)."""
 from __future__ import annotations
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from zoi_agent.agent.schemas import SessionState
 from zoi_agent.db.engine import get_session_factory
 from zoi_agent.db.models import Session as SessionRow

@@ -15,11 +15,9 @@ from typing import Any
 from zoi_agent.agent.schemas import SessionState
 from zoi_agent.logging import get_logger
 from zoi_agent.tools.inventory import (
-    get_vehicle_details,
     load_inventory,
     norm,
 )
-
 
 _FUZZY_THRESHOLD = 0.75
 

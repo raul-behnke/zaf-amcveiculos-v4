@@ -485,7 +485,7 @@ async def run_team_turn(
         result = await asyncio.wait_for(
             patricia.arun(input=patricia_input), timeout=_ARUN_TIMEOUT_S
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         log.error("patricia_arun_timeout", timeout_s=_ARUN_TIMEOUT_S)
         raise RuntimeError(f"Patricia.arun timeout >{_ARUN_TIMEOUT_S}s") from None
     content = getattr(result, "content", None)
