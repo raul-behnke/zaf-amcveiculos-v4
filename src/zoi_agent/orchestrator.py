@@ -22,11 +22,13 @@ import asyncio
 import random
 from typing import Any
 
+from zoi_agent import usage as usage_sink
 from zoi_agent.agent.question_planner import plan_next_question, push_asked_field
 from zoi_agent.agent.schemas import SessionState
 from zoi_agent.agent.updater import merge_into_state, run_updater
 from zoi_agent.config import settings
 from zoi_agent.db import sessions as session_repo
+from zoi_agent.db.events import compute_cost, emit_event
 from zoi_agent.ghl import conversations as ghl_conv
 from zoi_agent.logging import get_logger
 from zoi_agent.metrics import TURNS_TOTAL
@@ -343,13 +345,87 @@ async def _resolve_photos_to_send(
     return list(payload["images"]), payload.get("vehicle") or {}
 
 
+async def _flush_usage_events(contact_id: str, conversation_id: str | None) -> None:
+    """Drena o sink de uso do turno e emite 1 evento por chamada LLM/Whisper.
+
+    LLM_CALL: updater | estoque_expert | patricia. WHISPER_TRANSCRIPTION: áudio.
+    Cada evento já carrega custo USD calculado via tabela `pricing`.
+    """
+    records = usage_sink.drain()
+    for r in records:
+        try:
+            is_whisper = r.component == "whisper"
+            cost = await compute_cost(
+                model=r.model,
+                tokens_input=r.tokens_input,
+                tokens_output=r.tokens_output,
+                reasoning_tokens=r.reasoning_tokens,
+                audio_seconds=r.audio_seconds if is_whisper else None,
+            )
+            # Payload no envelope canônico (contrato §3.1 / §3.2).
+            cost_fields = {
+                "cost_usd": float(cost.cost_usd),
+                "cost_brl": float(cost.cost_brl),
+                "usd_brl_rate": float(cost.usd_brl_rate) if cost.usd_brl_rate else None,
+                "pricing_version": cost.pricing_version,
+                "latency_ms": r.latency_ms,
+            }
+            if is_whisper:
+                payload = {
+                    "model": r.model,
+                    "audio_seconds": r.audio_seconds,
+                    **cost_fields,
+                }
+            else:
+                payload = {
+                    "component": r.component,
+                    "model": r.model,
+                    "input_tokens": r.tokens_input,
+                    "output_tokens": r.tokens_output,
+                    "total_tokens": r.tokens_total,
+                    "reasoning_tokens": r.reasoning_tokens,
+                    **cost_fields,
+                }
+            await emit_event(
+                event_type="WHISPER_TRANSCRIPTION" if is_whisper else "LLM_CALL",
+                contact_id=contact_id,
+                conversation_id=conversation_id,
+                component=r.component,
+                model=r.model,
+                tokens_input=None if is_whisper else r.tokens_input,
+                tokens_output=None if is_whisper else r.tokens_output,
+                tokens_total=None if is_whisper else r.tokens_total,
+                reasoning_tokens=None if is_whisper else r.reasoning_tokens,
+                cost=cost,
+                payload=payload,
+            )
+        except Exception as e:
+            log.error("usage_event_emit_failed", component=r.component, err=str(e))
+
+
 async def _run_turn(contact_id: str, last_message: str) -> None:
+    """Wrapper: garante coleta/flush de telemetria em QUALQUER caminho de saída."""
+    usage_sink.start_turn()
+    ctx: dict[str, str | None] = {"conversation_id": None}
+    try:
+        await _run_turn_inner(contact_id, last_message, ctx)
+    finally:
+        await _flush_usage_events(contact_id, ctx.get("conversation_id"))
+
+
+async def _run_turn_inner(
+    contact_id: str, last_message: str, ctx: dict[str, str | None]
+) -> None:
     state = await session_repo.load_or_new(contact_id)
     if state.terminal_reason:
         log.info("turn_skipped_terminal", contact_id=contact_id, reason=state.terminal_reason)
         return
 
     history, conversation_id = await _fetch_history(contact_id)
+    ctx["conversation_id"] = conversation_id
+    # Persiste conversationId no estado → chave estável p/ telemetria/Hub,
+    # propaga via model_copy(deep=True) no merge_into_state.
+    state.conversation_id = conversation_id or state.conversation_id
 
     try:
         update = await run_updater(history=history, state=state, last_message=last_message)
@@ -450,6 +526,17 @@ async def _run_turn(contact_id: str, last_message: str) -> None:
             log.info(
                 "auto_book_success" if booking_source == "auto_match" else "lead_pick_book_success",
                 contact_id=contact_id, slot=slot_to_book,
+            )
+            await emit_event(
+                event_type="APPOINTMENT_CREATED",
+                contact_id=contact_id,
+                conversation_id=new_state.conversation_id,
+                payload={
+                    "slot_iso": slot_to_book,
+                    "appointment_id": (new_state.appointment or {}).get("id"),
+                    "modelo": modelo,
+                    "source": booking_source,
+                },
             )
             if not update.terminal_reason:
                 update.terminal_reason = "qualificado_agendado"

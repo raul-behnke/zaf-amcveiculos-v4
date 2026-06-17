@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from zoi_agent.agent.schemas import SessionState, VeiculoOrigem
 from zoi_agent.config import settings
 from zoi_agent.db import sessions as session_repo
+from zoi_agent.db.events import emit_event
 from zoi_agent.ghl import contacts as ghl_contacts
 from zoi_agent.ghl import conversations as ghl_conv
 from zoi_agent.logging import get_logger
@@ -98,6 +99,12 @@ async def greet(contact_id: str = Path(..., min_length=1)) -> dict:
         await session_repo.save(contact_id, new_state)
     except Exception as e:
         log.error("greet_state_save_failed", err=str(e))
+
+    await emit_event(
+        event_type="CONVERSATION_STARTED",
+        contact_id=contact_id,
+        payload={"veiculo_origem": veiculo_str, "com_veiculo": bool(veiculo_str)},
+    )
 
     log.info(
         "greet_sent",

@@ -15,6 +15,11 @@ async def init_schema() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # Seed preços OpenAI (idempotente) — habilita cálculo de custo dos eventos.
+    from zoi_agent.db.events import seed_pricing
+
+    await seed_pricing()
+
 
 async def load(contact_id: str) -> SessionState | None:
     factory = get_session_factory()

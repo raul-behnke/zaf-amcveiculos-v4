@@ -17,6 +17,7 @@ def patches(monkeypatch):
     monkeypatch.setattr(h.gc, "remove_tag", remove_mock)
     monkeypatch.setattr(h.gc, "add_note", note_mock)
     monkeypatch.setattr(h.gw, "add_to_workflow", wf_mock)
+    monkeypatch.setattr(h, "emit_event", AsyncMock())
     return {"remove": remove_mock, "note": note_mock, "wf": wf_mock}
 
 

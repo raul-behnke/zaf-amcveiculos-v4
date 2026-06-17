@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -21,6 +23,7 @@ def store(monkeypatch):
 
     monkeypatch.setattr(ab.session_repo, "load", load)
     monkeypatch.setattr(ab.session_repo, "save", save)
+    monkeypatch.setattr(ab, "emit_event", AsyncMock())
     return store
 
 

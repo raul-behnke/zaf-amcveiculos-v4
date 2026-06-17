@@ -24,6 +24,7 @@ def patch_all(monkeypatch):
 
     monkeypatch.setattr(greet_mod.session_repo, "load_or_new", fake_load_or_new)
     monkeypatch.setattr(greet_mod.session_repo, "save", fake_save)
+    monkeypatch.setattr(greet_mod, "emit_event", AsyncMock())
 
     get_contact_mock = AsyncMock()
     send_mock = AsyncMock()

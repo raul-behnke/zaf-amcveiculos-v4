@@ -12,11 +12,14 @@ from __future__ import annotations
 
 from zoi_agent.agent.schemas import SessionState
 from zoi_agent.config import settings
+from zoi_agent.db.events import emit_event
 from zoi_agent.ghl import contacts as gc
 from zoi_agent.ghl import workflows as gw
 from zoi_agent.logging import get_logger
 from zoi_agent.metrics import HANDOFF_TOTAL, QUALIFICADOS_TOTAL
 from zoi_agent.tools.terminal import build_consolidated_note
+
+_QUALIFICADO_REASONS = {"qualificado_agendado", "qualificado_sem_agenda"}
 
 log = get_logger(__name__)
 
@@ -71,5 +74,19 @@ async def encaminhar_para_vendedor(
         terminal_reason=terminal_reason,
         handoff_reason=(handoff_reason or "")[:80],
         **result,
+    )
+
+    # Telemetria: qualificado_* -> CONVERSATION_COMPLETED; handoff_* -> HANDOFF_CREATED.
+    is_qualificado = terminal_reason in _QUALIFICADO_REASONS
+    await emit_event(
+        event_type="CONVERSATION_COMPLETED" if is_qualificado else "HANDOFF_CREATED",
+        contact_id=contact_id,
+        conversation_id=state.conversation_id,
+        payload={
+            "terminal_reason": terminal_reason,
+            "handoff_reason": handoff_reason,
+            "com_agenda": bool(state.appointment) if is_qualificado else None,
+            "workflow_added": result["workflow_added"],
+        },
     )
     return result
