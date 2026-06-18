@@ -63,5 +63,10 @@ class Settings(BaseSettings):
     agent_name: str = "patricia-amc"  # slug do agente
     telemetry_events_enabled: bool = True
 
+    # Export HTTP p/ o coletor do Hub (transporte §5). Secret DEDICADO — NÃO é o
+    # webhook_secret. Vazio => /export/events responde 401 (nunca aberto).
+    zoi_export_secret: str = ""
+    export_table: str = "agent_events"
+
 
 settings = Settings()
