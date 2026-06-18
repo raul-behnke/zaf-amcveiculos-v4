@@ -17,11 +17,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from typing import Any
 
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 
+from zoi_agent import usage as usage_sink
 from zoi_agent.agent.question_planner import NextQuestion
 from zoi_agent.agent.schemas import SessionState, StateUpdate
 from zoi_agent.agent.templates import render_vehicle_card, render_vehicle_list
@@ -41,6 +43,48 @@ log = get_logger(__name__)
 
 # Timeouts duros pra detectar trava silenciosa do Agno arun()
 _ARUN_TIMEOUT_S = 45.0
+
+
+def _int_metric(val: Any) -> int:
+    """Agno expõe métricas ora como int, ora como list[int] (1 por mensagem)."""
+    if val is None:
+        return 0
+    if isinstance(val, (list, tuple)):
+        return int(sum(x for x in val if isinstance(x, (int, float))))
+    if isinstance(val, (int, float)):
+        return int(val)
+    return 0
+
+
+def _record_agno_usage(
+    result: Any, *, component: str, model: str, latency_ms: int | None = None
+) -> None:
+    """Lê RunOutput.metrics (input/output/total tokens) e registra no sink.
+
+    telemetry=False não afeta o objeto de métricas local — só o envio à nuvem
+    Agno. Defensivo a variações de shape entre versões do Agno.
+    """
+    metrics = getattr(result, "metrics", None)
+    if metrics is None:
+        return
+    try:
+        ti = _int_metric(getattr(metrics, "input_tokens", None))
+        to = _int_metric(getattr(metrics, "output_tokens", None))
+        tt = _int_metric(getattr(metrics, "total_tokens", None))
+        rt = _int_metric(getattr(metrics, "reasoning_tokens", None)) or None
+        if not (ti or to or tt):
+            return
+        usage_sink.record(
+            component=component,
+            model=model,
+            tokens_input=ti,
+            tokens_output=to,
+            tokens_total=tt,
+            reasoning_tokens=rt,
+            latency_ms=latency_ms,
+        )
+    except Exception as e:  # nunca quebrar o turno por telemetria
+        log.warning("agno_usage_extract_failed", component=component, err=str(e))
 
 
 # --- Detecção de sinal de estoque ------------------------------------------
@@ -272,8 +316,15 @@ async def _call_inventory_expert_with_retry(
         try:
             expert = await build_inventory_expert()
             expert_input = json.dumps(payload, ensure_ascii=False, default=str)
+            _t0 = time.perf_counter()
             expert_result = await asyncio.wait_for(
                 expert.arun(input=expert_input), timeout=_ARUN_TIMEOUT_S
+            )
+            _record_agno_usage(
+                expert_result,
+                component="estoque_expert",
+                model=settings.openai_model_inventory_expert,
+                latency_ms=int((time.perf_counter() - _t0) * 1000),
             )
             expert_content = getattr(expert_result, "content", None)
 
@@ -482,12 +533,19 @@ async def run_team_turn(
     patricia = build_patricia_agent()
     patricia_input = json.dumps(patricia_payload, ensure_ascii=False, default=str)
     try:
+        _t0 = time.perf_counter()
         result = await asyncio.wait_for(
             patricia.arun(input=patricia_input), timeout=_ARUN_TIMEOUT_S
         )
     except TimeoutError:
         log.error("patricia_arun_timeout", timeout_s=_ARUN_TIMEOUT_S)
         raise RuntimeError(f"Patricia.arun timeout >{_ARUN_TIMEOUT_S}s") from None
+    _record_agno_usage(
+        result,
+        component="patricia",
+        model=settings.openai_model_patricia,
+        latency_ms=int((time.perf_counter() - _t0) * 1000),
+    )
     content = getattr(result, "content", None)
 
     if not isinstance(content, BubbleSequence):

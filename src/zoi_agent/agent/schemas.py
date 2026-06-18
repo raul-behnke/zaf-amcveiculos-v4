@@ -133,6 +133,7 @@ class SessionState(BaseModel):
 
     stage: Stage = "abertura"
     greeted: bool = False
+    conversation_id: str | None = None  # GHL conversationId resolvido no turno — chave estável p/ telemetria
     veiculo_origem: VeiculoOrigem | None = None
     collected: Collected = Field(default_factory=Collected)
     vehicles_shown: list[str] = Field(default_factory=list)

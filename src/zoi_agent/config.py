@@ -58,5 +58,10 @@ class Settings(BaseSettings):
     metrics_enabled: bool = True
     metrics_port: int = 9090
 
+    # Telemetria / Performance Hub (envelope canônico v1)
+    client: str = "amc"  # slug do cliente na frota
+    agent_name: str = "patricia-amc"  # slug do agente
+    telemetry_events_enabled: bool = True
+
 
 settings = Settings()

@@ -6,10 +6,29 @@ from typing import TypeVar
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
+from zoi_agent import usage as usage_sink
 from zoi_agent.config import settings
 from zoi_agent.metrics import LLM_LATENCY
 
 T = TypeVar("T", bound=BaseModel)
+
+
+def _record_usage(resp, *, component: str, model: str, latency_ms: int | None = None) -> None:
+    """Captura response.usage da OpenAI no sink do turno. Tolerante a ausência."""
+    u = getattr(resp, "usage", None)
+    if u is None:
+        return
+    details = getattr(u, "completion_tokens_details", None)
+    reasoning = getattr(details, "reasoning_tokens", None) if details else None
+    usage_sink.record(
+        component=component,
+        model=model,
+        tokens_input=getattr(u, "prompt_tokens", 0) or 0,
+        tokens_output=getattr(u, "completion_tokens", 0) or 0,
+        tokens_total=getattr(u, "total_tokens", 0) or 0,
+        reasoning_tokens=reasoning,
+        latency_ms=latency_ms,
+    )
 
 _client: AsyncOpenAI | None = None
 
@@ -43,7 +62,9 @@ async def parse_structured(
             temperature=temperature,
         )
     finally:
-        LLM_LATENCY.labels(component=component).observe(time.perf_counter() - start)
+        elapsed = time.perf_counter() - start
+        LLM_LATENCY.labels(component=component).observe(elapsed)
+    _record_usage(resp, component=component, model=model, latency_ms=int(elapsed * 1000))
     parsed = resp.choices[0].message.parsed
     if parsed is None:
         raise RuntimeError(f"LLM {model} retornou parsed=None (refusal? {resp.choices[0].message.refusal!r})")
@@ -70,5 +91,7 @@ async def chat_text(
             temperature=temperature,
         )
     finally:
-        LLM_LATENCY.labels(component=component).observe(time.perf_counter() - start)
+        elapsed = time.perf_counter() - start
+        LLM_LATENCY.labels(component=component).observe(elapsed)
+    _record_usage(resp, component=component, model=model, latency_ms=int(elapsed * 1000))
     return resp.choices[0].message.content or ""

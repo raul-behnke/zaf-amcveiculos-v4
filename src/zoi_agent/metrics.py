@@ -18,6 +18,11 @@ QUALIFICADOS_TOTAL = Counter(
     ["com_agenda"],
 )
 
+ABANDONED_TOTAL = Counter(
+    "zoi_abandoned_total",
+    "Sessões encerradas por abandono (endpoint /abandon)",
+)
+
 LLM_LATENCY = Histogram(
     "zoi_llm_latency_seconds",
     "Latência das chamadas LLM",

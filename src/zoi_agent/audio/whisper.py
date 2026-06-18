@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from zoi_agent import usage as usage_sink
 from zoi_agent.config import settings
 from zoi_agent.llm import get_openai
 from zoi_agent.logging import get_logger
@@ -44,19 +45,32 @@ async def _transcribe_bytes(audio: bytes, filename: str, *, language: str = "pt"
     buf.name = filename  # API usa o name pra inferir formato
     start = time.perf_counter()
     try:
+        # verbose_json expõe `duration` (segundos) → custo Whisper por minuto.
         resp = await client.audio.transcriptions.create(
             model=settings.openai_model_whisper,
             file=buf,
             language=language,
-            response_format="text",
+            response_format="verbose_json",
         )
     finally:
-        LLM_LATENCY.labels(component="whisper").observe(time.perf_counter() - start)
-    # response_format="text" → SDK retorna string direta
+        elapsed = time.perf_counter() - start
+        LLM_LATENCY.labels(component="whisper").observe(elapsed)
+
     if isinstance(resp, str):
         return resp.strip()
-    text = getattr(resp, "text", "") or ""
-    return text.strip()
+    text = (getattr(resp, "text", "") or "").strip()
+    duration_s = getattr(resp, "duration", None)
+    if duration_s is not None:
+        try:
+            usage_sink.record(
+                component="whisper",
+                model=settings.openai_model_whisper,
+                audio_seconds=float(duration_s),
+                latency_ms=int(elapsed * 1000),
+            )
+        except (TypeError, ValueError):
+            pass
+    return text
 
 
 async def transcribe_url(url: str, *, language: str = "pt") -> str:
